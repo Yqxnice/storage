@@ -1,343 +1,250 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, dialog } from 'electron';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
+import { app } from 'electron';
 import Store from 'electron-store';
+import * as url from 'url';
+import * as path from 'path';
 import * as fs from 'fs';
 
-// IPC Channel 常量
-const IPC_CHANNELS = {
-  OPEN_FILE_DIALOG: 'open-file-dialog',
-  GET_FILE_PATH: 'get-file-path',
-  DRAG_FILES: 'drag-files',
-  OPEN_ITEM: 'open-item',
-  STORE_GET: 'store:get',
-  STORE_SET: 'store:set',
-  STORE_DELETE: 'store:delete',
-  STORE_CLEAR: 'store:clear',
-  GET_FILE_ICON: 'get-file-icon',
-  FILE_ADDED: 'file:added'
-} as const;
+// 导入 electron 模块
+import {
+  // 存储管理
+  ensureDataDir,
+  createSettingsStore,
+  createStorageStore,
 
-// 文件信息类型
-interface FileInfo {
-  name: string;
-  type: 'file' | 'folder' | 'icon';
-  path: string;
-  addedAt: number;
+  // 窗口管理
+  createMainWindow,
+  getMainWindow,
+
+  // IPC 处理
+  registerWindowControls,
+  registerFileHandlers,
+  registerStorageHandlers,
+
+  // 快捷键管理
+  setupGlobalDirname,
+  registerGlobalShortcut,
+  registerShortcutChangeListener,
+  setupShortcutCleanup,
+
+  // 自动更新
+  configureAutoUpdater,
+  registerAutoUpdaterEvents,
+  registerAutoUpdaterHandlers,
+  checkForUpdatesOnStartup,
+
+  // 文件验证
+  initializeFirstLaunch,
+
+  // 备份管理
+  BackupManager,
+
+  // 日志管理
+  Logger
+} from './electron';
+
+// 获取 __dirname
+function getDirname(): string {
+  const __filename = url.fileURLToPath(import.meta.url);
+  return path.dirname(__filename);
 }
 
-// 处理文件添加逻辑
-async function handleFileAdd(filePath: string): Promise<FileInfo> {
-  // 提取文件名
-  const name = path.basename(filePath);
-  
-  // 确定文件类型
-  let type: 'file' | 'folder' | 'icon' = 'file';
-  if (filePath.endsWith('.lnk')) {
-    type = 'icon';
-  } else {
-    // 这里可以添加逻辑判断是否为文件夹
-    // 暂时简单处理，根据路径是否包含扩展名判断
-    const ext = path.extname(filePath);
-    if (!ext) {
-      type = 'folder';
-    }
-  }
-  
-  // 返回文件信息
-  return {
-    name,
-    type,
-    path: filePath,
-    addedAt: Date.now()
-  };
-}
+// 主函数
+async function main() {
+  console.log('[Main] 应用启动');
+  console.log('[Main] 运行环境:', app.isPackaged ? '生产环境' : '开发环境');
+  console.log('[Main] Electron 版本:', process.versions.electron);
+  console.log('[Main] Node 版本:', process.versions.node);
 
-// 扫描桌面文件和文件夹
-async function scanDesktop(): Promise<FileInfo[]> {
-  const desktopPath = app.getPath('desktop');
-  const items: FileInfo[] = [];
+  // 设置全局 __dirname（用于 windows-shortcuts 模块）
+  const __dirname = getDirname();
+  setupGlobalDirname(__dirname);
+
+  // 确保数据目录存在（临时目录，用于首次启动时的设置存储）
+  const tempDataPath = ensureDataDir();
+  console.log('[Main] 临时数据目录:', tempDataPath);
+
+  // 创建临时设置存储
+  const tempSettingsStore = createSettingsStore(tempDataPath);
   
-  try {
-    const files = fs.readdirSync(desktopPath);
-    
-    for (const file of files) {
-      // 跳过隐藏文件和系统文件
-      if (file.startsWith('.') || file === 'desktop.ini') {
-        continue;
-      }
-      
-      const filePath = path.join(desktopPath, file);
-      
-      try {
-        const stat = fs.statSync(filePath);
-        
-        // 只收集快捷方式、文件夹和可执行文件
-        if (file.endsWith('.lnk') || file.endsWith('.exe') || stat.isDirectory()) {
-          const fileInfo = await handleFileAdd(filePath);
-          items.push(fileInfo);
+  // 检查是否已经初始化
+  const hasInitialized = tempSettingsStore.get('hasInitialized') as boolean;
+  const savedDataPath = tempSettingsStore.get('dataPath') as string | null;
+  
+  // 确定默认数据路径
+  let dataPath = savedDataPath || tempDataPath;
+  console.log('[Main] 初始数据目录:', dataPath);
+
+  // 注册窗口控制和文件操作 IPC handlers（这些只需要注册一次）
+  registerWindowControls();
+  registerFileHandlers();
+  console.log('[Main] 基础 IPC handlers 注册完成');
+
+  // 配置自动更新
+  configureAutoUpdater('你的GitHub用户名', '你的仓库名');
+  registerAutoUpdaterEvents();
+  registerAutoUpdaterHandlers();
+  console.log('[Main] 自动更新配置完成');
+
+  // 应用就绪后执行
+  app.on('ready', async () => {
+    try {
+      console.log('[Main] 应用 ready');
+
+      // 确定最终数据路径
+      let finalDataPath = savedDataPath || tempDataPath;
+      console.log('[Main] 初始数据目录:', finalDataPath);
+
+      // 确保数据目录存在
+      if (!fs.existsSync(finalDataPath)) {
+        try {
+          fs.mkdirSync(finalDataPath, { recursive: true });
+          console.log('[Main] 创建数据目录:', finalDataPath);
+        } catch (mkdirError) {
+          console.error('[Main] 创建数据目录失败:', mkdirError);
+          // 使用临时路径作为备选
+          finalDataPath = tempDataPath;
+          console.log('[Main] 使用临时路径作为备选:', finalDataPath);
         }
-      } catch (err) {
-        // 跳过无法访问的文件
-        console.warn(`无法访问文件: ${filePath}`, err);
       }
-    }
-    
-    console.log(`扫描到 ${items.length} 个桌面项目`);
-  } catch (err) {
-    console.error('扫描桌面失败:', err);
-  }
-  
-  return items;
-}
 
-// 创建一个 electron-store 实例
-const store = new Store({
-  name: 'desk-organizer'
-});
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-let mainWindow: BrowserWindow | null = null;
-
-function createWindow() {
-  // 禁用菜单栏
-  Menu.setApplicationMenu(null);
-
-  // preload 文件路径 - 开发环境从源目录加载，生产环境从构建目录加载
-  let preloadPath: string;
-  if (process.env.NODE_ENV === 'development') {
-    // 开发环境：从项目根目录加载
-    preloadPath = path.join(__dirname, 'preload.js');
-  } else {
-    // 生产环境：从构建目录加载
-    preloadPath = path.join(__dirname, 'preload.js');
-  }
-
-  console.log('[Main] Preload path:', preloadPath);
-  console.log('[Main] __dirname:', __dirname);
-  console.log('[Main] File exists:', fs.existsSync(preloadPath));
-
-  mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    autoHideMenuBar: true, // 隐藏菜单栏
-    webPreferences: {
-      preload: preloadPath,
-      // Enable context isolation and disable direct Node integration for security
-      nodeIntegration: false,
-      contextIsolation: true,
-      // webSecurity 保持启用状态，通过 CSP 和 IPC 来处理文件图标
-    }
-  });
-
-  // 加载应用
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-  
-  // Drag events are now handled in the renderer via IPC; no main process dragover listener.
-
-  // Drag-and-drop moved to renderer (IPC-based path transfer). Main process no longer handles drop events directly.
-
-  // 允许应用接收文件拖拽（渲染进程处理，主进程不再拦截拖拽）
-}
-
-// 注册全局 IPC handlers，避免在 createWindow 内重复注册
-// Open file dialog handler for fallback path retrieval from renderer
-ipcMain.handle(IPC_CHANNELS.OPEN_FILE_DIALOG, async () => {
-  const result = await dialog.showOpenDialog({ properties: ['openFile'] });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0];
-});
-
-// 监听渲染进程发送的获取文件路径的消息
-// 注意：此接口已废弃，实际拖拽通过 drag-files IPC 处理
-ipcMain.on(IPC_CHANNELS.GET_FILE_PATH, (event, data) => {
-  console.log('接收到获取文件路径请求（已废弃）:', data);
-  console.warn(`${IPC_CHANNELS.GET_FILE_PATH} 接口已废弃，请使用 ${IPC_CHANNELS.DRAG_FILES} 接口`);
-});
-
-// IPC: receive drag file paths from renderer and process them
-ipcMain.on(IPC_CHANNELS.DRAG_FILES, (event, filePaths) => {
-  console.log('接收到拖拽文件路径:', filePaths);
-  if (!Array.isArray(filePaths)) return;
-  for (const filePath of filePaths) {
-    if (typeof filePath !== 'string' || filePath.length === 0) continue;
-    console.log('处理文件:', filePath);
-    handleFileAdd(filePath).then(fileInfo => {
-      console.log('处理后的文件信息:', fileInfo);
-      if (mainWindow) {
-        mainWindow.webContents.send(IPC_CHANNELS.FILE_ADDED, fileInfo);
-        console.log(`已发送${IPC_CHANNELS.FILE_ADDED}事件:`, fileInfo.name);
+      // 创建存储
+      const settingsStore = createSettingsStore(finalDataPath);
+      const storageStore = createStorageStore(finalDataPath);
+      
+      // 创建备份管理器
+      const backupManager = new BackupManager(finalDataPath, storageStore);
+      
+      // 创建日志管理器
+      const logger = new Logger(finalDataPath);
+      
+      // 设置自动备份
+      const autoBackupInterval = settingsStore.get('autoBackupInterval') || '10min';
+      backupManager.setAutoBackupInterval(autoBackupInterval);
+      
+      // 设置日志自动清理
+      const logAutoCleanupDays = settingsStore.get('logAutoCleanupDays') || '2';
+      logger.setAutoCleanupDays(logAutoCleanupDays);
+      
+      // 记录应用启动
+      logger.info('应用启动', {
+        version: app.getVersion(),
+        platform: process.platform,
+        electron: process.versions.electron,
+        node: process.versions.node
+      });
+      
+      // 如果有临时设置，迁移到正式存储
+      if (tempSettingsStore.get('dataPath')) {
+        settingsStore.set('dataPath', tempSettingsStore.get('dataPath'));
       }
-    }).catch(error => {
-      console.error('处理拖拽文件时出错:', error);
-    });
-  }
-});
+      
+      console.log('[Main] 存储初始化完成');
 
-// 监听渲染进程发送的打开文件或文件夹的消息
-ipcMain.on(IPC_CHANNELS.OPEN_ITEM, (event, item) => {
-  if (!item.path) return;
+      // 注册存储相关 IPC handlers（只注册一次）
+      registerStorageHandlers(settingsStore, storageStore, backupManager, logger);
+      console.log('[Main] 存储 IPC handlers 注册完成');
 
-  console.log('打开项目:', item);
-  console.log('项目路径:', item.path);
+      // 创建窗口
+      const mainWindow = createMainWindow();
+      console.log('[Main] 主窗口创建完成');
 
-  // 根据操作系统选择不同的命令
-  const isWindows = process.platform === 'win32';
+      // 注册快捷键
+      registerGlobalShortcut(settingsStore);
+      registerShortcutChangeListener(settingsStore);
+      setupShortcutCleanup();
+      console.log('[Main] 快捷键注册完成');
 
-  if (isWindows) {
-    // Windows 系统
-    // 使用 spawn 命令，避免命令注入
-    spawn('cmd.exe', ['/c', 'start', '', item.path], {
-      detached: true,
-      stdio: 'ignore'
-    }).unref();
-  } else if (process.platform === 'darwin') {
-    // macOS 系统
-    spawn('open', [item.path], {
-      detached: true,
-      stdio: 'ignore'
-    }).unref();
-  } else {
-    // Linux 系统
-    spawn('xdg-open', [item.path], {
-      detached: true,
-      stdio: 'ignore'
-    }).unref();
-  }
-});
+      // 启动时自动检查更新
+      checkForUpdatesOnStartup();
 
-app.on('ready', async () => {
-  createWindow();
-  
-  // 检查是否是首次启动
-  const hasInitialized = store.get('hasInitialized') as boolean;
-  
-  if (!hasInitialized) {
-    console.log('首次启动，正在初始化...');
-    
-    // 扫描桌面
-    const desktopItems = await scanDesktop();
-    
-    // 创建初始数据 - 按照 zustand persist 的格式
-    const initialData = {
-      state: {  // zustand persist 需要 state 包装
-        boxes: [
-          {
-            id: '1',
-            name: '桌面文件',
-            itemCount: desktopItems.length,
-            createdAt: Date.now()
-          }
-        ],
-        items: desktopItems.map((item, index) => ({
-          ...item,
-          id: `item-${index + 1}`,
-          boxId: '1',
-          tags: []  // 添加空的标签数组，匹配 Item 接口
-        })),
-        activeBoxId: '1',
-        viewMode: 'large',
-        searchQuery: '',
-        trayVisible: true
-      },
-      version: 0  // zustand persist 版本控制
-    };
-    
-    // 保存初始数据 - 使用 zustand persist 期望的格式
-    store.set('desk-organizer-storage', initialData);
-    
-    // 标记已初始化
-    store.set('hasInitialized', true);
-    
-    console.log(`初始化完成，已添加 ${desktopItems.length} 个桌面项目`);
-    console.log('收纳盒:', initialData.state.boxes[0].name, '- 文件数:', initialData.state.boxes[0].itemCount);
-  } else {
-    console.log('非首次启动，跳过初始化');
-  }
-  
-  // 注册全局快捷键 (Ctrl+Shift+Space)
-  const ret = globalShortcut.register('Ctrl+Shift+Space', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
+      // 检查是否需要初始化
+      if (savedDataPath) {
+        await initializeFirstLaunch(settingsStore, storageStore);
+        console.log('[Main] 已初始化（有保存的路径）');
       } else {
-        mainWindow.show();
-        mainWindow.focus();
+        // 检查是否为便携版（已打包且数据目录在应用程序目录中）
+        const isPortable = app.isPackaged && finalDataPath.includes(path.dirname(app.getPath('exe')));
+        if (isPortable) {
+          console.log('[Main] 便携版：等待用户选择数据路径后再初始化');
+        } else {
+          // 非便携版：直接初始化
+          await initializeFirstLaunch(settingsStore, storageStore);
+          console.log('[Main] 非便携版：使用默认路径初始化');
+        }
+      }
+    } catch (error) {
+      console.error('[Main] 应用初始化失败:', error);
+      // 即使出错也继续运行，使用默认设置
+      try {
+        const fallbackDataPath = tempDataPath;
+        const fallbackSettingsStore = createSettingsStore(fallbackDataPath);
+        const fallbackStorageStore = createStorageStore(fallbackDataPath);
+        
+        // 创建备份管理器
+        const fallbackBackupManager = new BackupManager(fallbackDataPath, fallbackStorageStore);
+        const autoBackupInterval = fallbackSettingsStore.get('autoBackupInterval') || '10min';
+        fallbackBackupManager.setAutoBackupInterval(autoBackupInterval);
+        
+        // 创建日志管理器
+        const fallbackLogger = new Logger(fallbackDataPath);
+        const logAutoCleanupDays = fallbackSettingsStore.get('logAutoCleanupDays') || '2';
+        fallbackLogger.setAutoCleanupDays(logAutoCleanupDays);
+        
+        // 记录应用启动（备用模式）
+        fallbackLogger.info('应用启动（备用模式）', {
+          version: app.getVersion(),
+          platform: process.platform
+        });
+        
+        registerStorageHandlers(fallbackSettingsStore, fallbackStorageStore, fallbackBackupManager, fallbackLogger);
+        const mainWindow = createMainWindow();
+        registerGlobalShortcut(fallbackSettingsStore);
+        registerShortcutChangeListener(fallbackSettingsStore);
+        setupShortcutCleanup();
+        checkForUpdatesOnStartup();
+        
+        // 检查是否为便携版（已打包且数据目录在应用程序目录中）
+        const isPortable = app.isPackaged && fallbackDataPath.includes(path.dirname(app.getPath('exe')));
+        if (!isPortable) {
+          // 非便携版：直接初始化
+          initializeFirstLaunch(fallbackSettingsStore, fallbackStorageStore).catch(err => {
+            console.error('[Main] 备用模式初始化失败:', err);
+          });
+          console.log('[Main] 非便携版：使用默认路径初始化（备用模式）');
+        } else {
+          console.log('[Main] 便携版：等待用户选择数据路径后再初始化（备用模式）');
+        }
+        
+        console.log('[Main] 应用已使用默认设置启动');
+        
+      } catch (fallbackError) {
+        console.error('[Main] 备用启动也失败:', fallbackError);
+        app.quit();
       }
     }
   });
 
-  if (!ret) {
-    console.log('Failed to register shortcut');
-  }
-});
+  // 窗口全部关闭
+  app.on('window-all-closed', () => {
+    console.log('[Main] 所有窗口已关闭');
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  // 应用激活（macOS）
+  app.on('activate', () => {
+    console.log('[Main] 应用激活');
+    if (getMainWindow() === null) {
+      createMainWindow();
+    }
+  });
 
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  }
-});
+  console.log('[Main] 主函数执行完成');
+}
 
-// 存储相关的 IPC 处理程序
-ipcMain.handle(IPC_CHANNELS.STORE_GET, (event, key) => {
-  return store.get(key);
-});
-
-ipcMain.handle(IPC_CHANNELS.STORE_SET, (event, { key, value }) => {
-  store.set(key, value);
-  return true;
-});
-
-ipcMain.handle(IPC_CHANNELS.STORE_DELETE, (event, key) => {
-  store.delete(key);
-  return true;
-});
-
-ipcMain.handle(IPC_CHANNELS.STORE_CLEAR, () => {
-  store.clear();
-  return true;
-});
-
-// 获取文件图标
-ipcMain.handle(IPC_CHANNELS.GET_FILE_ICON, async (event, filePath) => {
-  try {
-    // 核心：获取系统图标（大小可选：normal / large）
-    const iconNative = await app.getFileIcon(filePath, { size: 'large' });
-
-    // 转为 base64，直接给前端 img 标签使用
-    const base64 = iconNative.toDataURL();
-
-    return {
-      success: true,
-      icon: base64
-    };
-  } catch (err) {
-    return {
-      success: false,
-      message: err instanceof Error ? err.message : String(err)
-    };
-  }
-});
-
-app.on('will-quit', () => {
-  // 注销全局快捷键
-  globalShortcut.unregisterAll();
+// 运行主函数
+main().catch((err) => {
+  console.error('[Main] 应用启动失败:', err);
+  app.quit();
 });

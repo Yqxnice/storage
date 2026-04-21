@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import electron from 'vite-plugin-electron'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
@@ -13,12 +12,42 @@ export default defineConfig({
         onstart(args) {
           args.startup();
         },
+        vite: {
+          build: {
+            minify: 'terser',
+            terserOptions: {
+              compress: {
+                drop_console: true,
+                drop_debugger: true,
+                pure_funcs: ['console.log', 'console.warn', 'console.info']
+              },
+              format: {
+                comments: false
+              }
+            }
+          }
+        }
       },
       {
         entry: 'preload.js',
         onstart(args) {
           args.reload();
         },
+        vite: {
+          build: {
+            minify: 'terser',
+            terserOptions: {
+              compress: {
+                drop_console: true,
+                drop_debugger: true,
+                pure_funcs: ['console.log', 'console.warn', 'console.info']
+              },
+              format: {
+                comments: false
+              }
+            }
+          }
+        }
       },
     ]),
   ],
@@ -29,25 +58,46 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      '@babel/runtime': '@babel/runtime-corejs3',
     },
   },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     target: 'esnext',
-    minify: 'esbuild',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.warn', 'console.info']
+      },
+      format: {
+        comments: false
+      }
+    },
     rollupOptions: {
+      external: ['winrt', '@babel/runtime', /^@babel\/runtime\/.*$/],
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom')) {
               return 'vendor';
             }
+            if (id.includes('antd') || id.includes('@ant-design')) {
+              return 'antd';
+            }
+            if (id.includes('@dnd-kit')) {
+              return 'dnd-kit';
+            }
           }
         },
+        compact: true,
       },
     },
     chunkSizeWarningLimit: 1000,
+    cssCodeSplit: true,
+    sourcemap: false,
   },
   server: {
     port: 5173,
@@ -58,7 +108,7 @@ export default defineConfig({
       port: 5173
     },
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; connect-src 'self' http://localhost:* ws://localhost:* ws://127.0.0.1:*; font-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; worker-src 'self' blob:; frame-src 'none';"
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; connect-src 'self' http://localhost:* ws://localhost:* ws://127.0.0.1:*; font-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; worker-src 'self' blob:; frame-src 'none';"
     }
   },
 })
