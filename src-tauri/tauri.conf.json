@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "桌面收纳",
+  "productName": "StorageApp",
   "version": "1.0.0",
   "identifier": "com.desktopstorage.app",
   "build": {
