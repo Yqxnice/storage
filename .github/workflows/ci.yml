@@ -44,10 +44,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          default: true
+          override: true
 
       - name: Setup Rust Cache
         uses: Swatinem/rust-cache@v2

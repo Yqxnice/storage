@@ -32,11 +32,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: x86_64-pc-windows-msvc
+          default: true
+          override: true
+          target: x86_64-pc-windows-msvc
 
       - name: Setup Rust Cache
         uses: Swatinem/rust-cache@v2
