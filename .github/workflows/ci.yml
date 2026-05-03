@@ -63,6 +63,4 @@ jobs:
         run: npm run build
 
       - name: Build Tauri (Check)
-        run: |
-          cd src-tauri
-          cargo check --release
+        run: cd src-tauri && cargo check --release

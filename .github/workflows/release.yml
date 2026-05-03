@@ -49,16 +49,7 @@ jobs:
         run: npm ci
 
       - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'v__VERSION__'
-          releaseBody: ${{ github.event.head_commit.message }}
-          releaseDraft: true
-          prerelease: false
-          args: --target x86_64-pc-windows-msvc
+        run: npm run tauri:build -- --target x86_64-pc-windows-msvc
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
