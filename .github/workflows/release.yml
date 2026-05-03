@@ -47,9 +47,9 @@ jobs:
           cache: 'npm'
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          version: ${{ env.RUST_VERSION }}
+          toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
       - name: Setup Rust Cache

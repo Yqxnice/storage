@@ -50,9 +50,9 @@ jobs:
           cache: 'npm'
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          version: ${{ env.RUST_VERSION }}
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Setup Rust Cache
         uses: Swatinem/rust-cache@v2
