@@ -1,0 +1,46 @@
+[package]
+name = "storage"
+version = "0.1.0"
+description = "桌面文件收纳工具"
+authors = ["Desktop Storage <desktop.storage@example.com>"]
+license = "MIT"
+repository = "https://github.com/Yqxnice/storage"
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "storage_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.10.3", features = ["default"] }
+tauri-plugin-log = "2"
+tauri-plugin-store = "2"
+tauri-plugin-global-shortcut = "2.0.0-beta.17"
+tauri-plugin-dialog = "2"
+dirs = "5.0.1"
+lazy_static = "1.4.0"
+fs2 = "0.4.3"
+chrono = "0.4.38"
+image = "0.25"
+base64 = "0.22"
+winapi = { version = "0.3", features = ["winbase", "shellapi", "commctrl", "wingdi"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

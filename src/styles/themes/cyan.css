@@ -1,0 +1,9 @@
+/* 青色主题 */
+
+[data-theme="cyan"] {
+  --color-primary: #15aabf;
+  --color-primary-bg: #e3fafc;
+  --color-primary-text: #0c8599;
+  --color-primary-hover: #1098ad;
+  --color-primary-border: #15aabf;
+}

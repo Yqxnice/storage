@@ -1,0 +1,9 @@
+/* 主题样式统一导入 */
+
+@import './blue.css';
+@import './green.css';
+@import './purple.css';
+@import './orange.css';
+@import './pink.css';
+@import './cyan.css';
+@import './dark.css';

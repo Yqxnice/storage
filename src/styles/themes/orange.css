@@ -1,0 +1,9 @@
+/* 橙色主题 */
+
+[data-theme="orange"] {
+  --color-primary: #fd7e14;
+  --color-primary-bg: #fff4e6;
+  --color-primary-text: #e67700;
+  --color-primary-hover: #f76707;
+  --color-primary-border: #fd7e14;
+}

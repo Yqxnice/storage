@@ -1,0 +1,9 @@
+/* 紫色主题 */
+
+[data-theme="purple"] {
+  --color-primary: #be4bdb;
+  --color-primary-bg: #f8f0fc;
+  --color-primary-text: #9c36b5;
+  --color-primary-hover: #ae3ec9;
+  --color-primary-border: #be4bdb;
+}

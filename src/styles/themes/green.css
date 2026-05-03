@@ -1,0 +1,9 @@
+/* 绿色主题 */
+
+[data-theme="green"] {
+  --color-primary: #40c057;
+  --color-primary-bg: #ebfbee;
+  --color-primary-text: #2f9e44;
+  --color-primary-hover: #37b24d;
+  --color-primary-border: #40c057;
+}

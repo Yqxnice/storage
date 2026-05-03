@@ -1,0 +1,124 @@
+/* 全局 CSS 变量 - 样式系统核心 */
+
+:root {
+  /* ============================================
+     颜色系统 - 语义化命名
+     ============================================ */
+  
+  /* 基础色 */
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-card: #ffffff;
+  --color-card-hover: #fafbfc;
+  
+  /* 边框颜色 */
+  --color-border: #e9ecef;
+  --color-border-light: #dee2e6;
+  
+  /* 文字颜色 */
+  --color-text: #212529;
+  --color-text-secondary: #495057;
+  --color-text-tertiary: #adb5bd;
+  
+  /* 状态色 */
+  --color-success: #2f9e44;
+  --color-success-bg: #ebfbee;
+  --color-warning: #f59f00;
+  --color-warning-bg: #fff4e6;
+  --color-error: #e03131;
+  --color-error-bg: #fff0f0;
+  --color-info: #15aabf;
+  --color-info-bg: #e3fafc;
+  
+  /* 主题色 - 默认蓝色主题 */
+  --color-primary: #4263eb;
+  --color-primary-bg: #eef2ff;
+  --color-primary-text: #364fc7;
+  --color-primary-hover: #3b5bdb;
+  --color-primary-border: #4263eb;
+  
+  
+  /* ============================================
+     间距系统
+     ============================================ */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  
+  
+  /* ============================================
+     圆角系统
+     ============================================ */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-full: 9999px;
+  
+  
+  /* ============================================
+     阴影系统
+     ============================================ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.15);
+  
+  
+  /* ============================================
+     动画系统
+     ============================================ */
+  --duration-fast: 0.1s;
+  --duration-base: 0.15s;
+  --duration-slow: 0.25s;
+  
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-in-out: cubic-bezier(0.445, 0.05, 0.55, 0.95);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+  
+  
+  /* ============================================
+     字体系统
+     ============================================ */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 15px;
+  --font-size-2xl: 16px;
+  --font-size-3xl: 20px;
+  
+  
+  /* ============================================
+     布局变量
+     ============================================ */
+  --sidebar-width: 200px;
+  --titlebar-height: 38px;
+  --bottom-nav-height: 48px;
+  
+  
+  /* ============================================
+     Z-index 层级
+     ============================================ */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal: 1000;
+  --z-overlay: 1500;
+  
+  
+  /* ============================================
+     全局过渡
+     ============================================ */
+  transition:
+    background-color var(--duration-slow) var(--ease-in-out),
+    color var(--duration-slow) var(--ease-in-out),
+    border-color var(--duration-slow) var(--ease-in-out);
+}

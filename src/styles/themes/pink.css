@@ -1,0 +1,9 @@
+/* 粉色主题 */
+
+[data-theme="pink"] {
+  --color-primary: #f06595;
+  --color-primary-bg: #fff0f6;
+  --color-primary-text: #d63384;
+  --color-primary-hover: #e64980;
+  --color-primary-border: #f06595;
+}

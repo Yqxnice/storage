@@ -1,0 +1,18 @@
+/* 暗色主题 */
+
+[data-theme="dark"] {
+  --color-bg: #1a1a2e;
+  --color-surface: #16213e;
+  --color-card: #16213e;
+  --color-card-hover: #1f2937;
+  --color-border: #374151;
+  --color-border-light: #4b5563;
+  --color-text: #f9fafb;
+  --color-text-secondary: #d1d5db;
+  --color-text-tertiary: #9ca3af;
+  --color-primary: #6366f1;
+  --color-primary-bg: #1e1b4b;
+  --color-primary-text: #a5b4fc;
+  --color-primary-hover: #4f46e5;
+  --color-primary-border: #6366f1;
+}

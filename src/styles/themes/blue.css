@@ -1,0 +1,9 @@
+/* 蓝色主题 */
+
+[data-theme="blue"] {
+  --color-primary: #4263eb;
+  --color-primary-bg: #eef2ff;
+  --color-primary-text: #364fc7;
+  --color-primary-hover: #3b5bdb;
+  --color-primary-border: #4263eb;
+}

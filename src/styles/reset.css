@@ -1,0 +1,129 @@
+/* CSS 重置和基础样式 */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  overflow: hidden;
+}
+
+/* 禁用选择 */
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 允许选择的元素 */
+input,
+textarea,
+.page-input,
+select {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  cursor: text;
+}
+
+/* 禁用右键的元素 */
+.page-row-name,
+.page-row-desc,
+.page-section-title,
+.about-info-value,
+.update-modal-message,
+.lib-name,
+.lib-title,
+.lib-desc,
+.about-name,
+.about-version,
+.about-tagline,
+.item-nm,
+.item-path,
+.header-title,
+.header-desc {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* 允许右键菜单的区域 */
+.allow-right-click {
+  -webkit-context-menu: auto;
+}
+
+/* 移除图片默认样式 */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 移除按钮默认样式 */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  outline: none;
+}
+
+/* 移除列表默认样式 */
+ul, ol {
+  list-style: none;
+}
+
+/* 移除链接默认样式 */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 输入框样式重置 */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: inherit;
+  border: none;
+  outline: none;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
