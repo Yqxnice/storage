@@ -16,25 +16,11 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
-  RUST_VERSION: '1.77.2'
+  RUST_VERSION: '1.78.0'
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: windows
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-            artifact: macos
-          - platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            artifact: linux
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -50,7 +36,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ matrix.target }}
+          targets: x86_64-pc-windows-msvc
 
       - name: Setup Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -70,15 +56,15 @@ jobs:
           releaseBody: ${{ github.event.head_commit.message }}
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target x86_64-pc-windows-msvc
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}-build
+          name: windows-build
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/**
-            !src-tauri/target/${{ matrix.target }}/release/build/**
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**
+            !src-tauri/target/x86_64-pc-windows-msvc/release/build/**
           retention-days: 30
 
   release:
@@ -104,11 +90,5 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.msi
-            artifacts/**/*.dmg
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/windows-build/bundle/**/*.exe
-            artifacts/windows-build/bundle/**/*.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
