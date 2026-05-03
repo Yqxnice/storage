@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production'
@@ -53,7 +56,6 @@ export default defineConfig(({ mode }) => {
             }
           },
           compact: true,
-          // 确保CSS不被拆分到不同文件导致加载问题
           assetFileNames: (assetInfo) => {
             if (assetInfo.name?.endsWith('.css')) {
               return 'assets/[name]-[hash][extname]';
@@ -63,12 +65,10 @@ export default defineConfig(({ mode }) => {
         },
       },
       chunkSizeWarningLimit: 1000,
-      cssCodeSplit: false, // 禁用CSS拆分，减少加载问题
+      cssCodeSplit: false,
       sourcemap: false,
-      // 确保资源可以正确加载
       assetsDir: 'assets',
     },
-    // 确保资源基础路径正确
     base: './',
     server: {
       port: 3000,

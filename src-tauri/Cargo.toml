@@ -1,6 +1,6 @@
 [package]
 name = "storage"
-version = "0.1.0"
+version = "1.0.0"
 description = "桌面文件收纳工具"
 authors = ["Desktop Storage <desktop.storage@example.com>"]
 license = "MIT"

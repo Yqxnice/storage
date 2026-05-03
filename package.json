@@ -1,7 +1,7 @@
 {
   "name": "storage",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "桌面文件收纳工具",
   "author": "Desktop Storage App",
