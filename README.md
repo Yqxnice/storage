@@ -93,13 +93,9 @@ npm run release:major
 
 ### 发布流程
 
-1. 确保所有更改已提交到 `dev` 分支
-2. 创建发布分支：`git checkout -b release/v.x.x.x`
-3. 运行发布命令
-4. 提交并推送：`git add . && git commit -m "chore: release v.x.x.x"`
-5. 创建标签：`git tag v.x.x.x`
-6. 推送：`git push && git push --tags`
-7. GitHub Actions 将自动构建并发布到 Releases
+完整的自动更新配置和发布流程，请参考：
+
+📖 **[UPDATER_GUIDE.md - 应用自动更新指南](./UPDATER_GUIDE.md)**
 
 ## 项目结构
 
@@ -127,7 +123,7 @@ storage/
 ├── .github/workflows/    # GitHub Actions 配置
 ├── version.js           # 版本管理脚本
 ├── commitlint.config.js # Git 提交规范
-├── GIT_WORKFLOW.md      # Git 工作流文档
+├── UPDATER_GUIDE.md     # 自动更新配置和发布指南
 └── vite.config.ts        # Vite 配置（多入口）
 ```
 
