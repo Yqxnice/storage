@@ -2,8 +2,7 @@
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_updater::Builder::new().build())
-    .invoke_handler(tauri::generate_handler![open_item, win_minimize, win_maximize, win_close, win_is_maximized, win_toggle_maximize, store_get, store_set, store_delete, store_clear, register_global_shortcut, unregister_global_shortcut, drag_files, path_item_kind, get_file_size, scan_desktop_files, get_file_icon, open_file_dialog, check_for_updates, dialog_show_input_box, dialog_show_confirm, fs_exists, fs_mkdir, app_get_path, backup_create, backup_restore, backup_cleanup, backup_get_backups, backup_set_auto_backup_interval, logger_write_log, logger_clear_logs, logger_set_auto_cleanup_days, logger_get_logs, set_portable_mode, open_in_explorer, set_window_always_on_top, set_window_transparency])
+    .invoke_handler(tauri::generate_handler![open_item, win_minimize, win_maximize, win_close, win_is_maximized, win_toggle_maximize, store_get, store_set, store_delete, store_clear, register_global_shortcut, unregister_global_shortcut, drag_files, path_item_kind, get_file_size, scan_desktop_files, get_file_icon, open_file_dialog, dialog_show_input_box, dialog_show_confirm, fs_exists, fs_mkdir, app_get_path, backup_create, backup_restore, backup_cleanup, backup_get_backups, backup_set_auto_backup_interval, logger_write_log, logger_clear_logs, logger_set_auto_cleanup_days, logger_get_logs, set_portable_mode, open_in_explorer, set_window_always_on_top, set_window_transparency])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -1009,12 +1008,6 @@ fn open_file_dialog() -> Result<Vec<String>, String> {
 }
 
 // 应用相关命令
-#[tauri::command]
-fn check_for_updates() -> Result<(), String> {
-    // 简化实现
-    Ok(())
-}
-
 #[tauri::command]
 fn dialog_show_input_box(_options: HashMap<String, String>) -> Result<String, String> {
     // 简化实现，返回空字符串

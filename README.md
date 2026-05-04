@@ -93,9 +93,23 @@ npm run release:major
 
 ### 发布流程
 
-完整的自动更新配置和发布流程，请参考：
+推送 `v*` 标签即可触发 GitHub Actions 自动构建和发布：
 
-📖 **[UPDATER_GUIDE.md - 应用自动更新指南](./UPDATER_GUIDE.md)**
+```bash
+# 1. 更新版本号
+npm run release:patch  # 或 minor、major
+
+# 2. 提交并推送
+git add .
+git commit -m "chore: release v1.2.0"
+git push
+
+# 3. 创建标签并推送
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+GitHub Actions 会自动构建并创建 Release。
 
 ## 项目结构
 
