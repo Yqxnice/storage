@@ -114,21 +114,19 @@ jobs:
           # Build download URL
           $downloadUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v${version}/$($nsisFile.Name)"
 
-          # Create latest.json
-          $latestJson = @"
-{
-  "version": "${version}",
-  "notes": "版本 ${version} 更新",
-  "pub_date": "${date}",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "${signature}",
-      "url": "${downloadUrl}"
-    }
-  }
-}
-"@
-          $latestJson | Out-File -FilePath "latest.json" -Encoding utf8
+          # Create latest.json using PowerShell hashtable to avoid YAML HEREDOC issues
+          $latestObj = @{
+            version = $version
+            notes = "版本 ${version} 更新"
+            pub_date = $date
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = $downloadUrl
+              }
+            }
+          }
+          $latestObj | ConvertTo-Json -Depth 10 | Out-File -FilePath "latest.json" -Encoding utf8
           Write-Host "latest.json created for version ${version}"
           Get-Content "latest.json"
 
