@@ -68,10 +68,6 @@ jobs:
             $installerFile = $files | Select-Object -First 1
             Write-Host "Signing: $($installerFile.FullName)"
 
-            # Set environment variables for tauri signer
-            $env:TAURI_SIGNING_PRIVATE_KEY = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-            $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
-
             # Sign the installer
             $signature = npx tauri signer sign $installerFile.FullName 2>&1
 
