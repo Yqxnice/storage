@@ -116,17 +116,17 @@ jobs:
 
           # Create latest.json
           $latestJson = @"
-          {
-            "version": "${version}",
-            "notes": "版本 ${version} 更新",
-            "pub_date": "${date}",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "${signature}",
-                "url": "${downloadUrl}"
-              }
-            }
-          }
+{
+  "version": "${version}",
+  "notes": "版本 ${version} 更新",
+  "pub_date": "${date}",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "${signature}",
+      "url": "${downloadUrl}"
+    }
+  }
+}
 "@
           $latestJson | Out-File -FilePath "latest.json" -Encoding utf8
           Write-Host "latest.json created for version ${version}"
