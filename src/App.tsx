@@ -15,7 +15,7 @@ import Settings from './page/Settings'
 import TitleBar from './components/common/TitleBar'
 import DataPathSelector from './components/DataPathSelector'
 import WelcomeModal from './components/WelcomeModal'
-import { useStore, type Box, type Item, type SettingsState, type OrphanBoxFloat, setStorageInitialized, getIsResetting, setIsResetting } from './store'
+import { useStore, type Box, type Item, type SettingsState, type OrphanBoxFloat, setStorageInitialized, getIsResetting, setIsResetting, shouldSkipStartupBackup, recordStartupTime } from './store'
 import { restoreOrphanBoxFloatWindows } from './utils/box-float-actions'
 import { applyTheme } from './utils/theme'
 import { tauriIPC, IPC_CHANNELS } from './utils/tauri-ipc'
@@ -128,18 +128,20 @@ function App() {
       }
       
       log('info', '应用数据同步完成');
-      
-      // 启动时创建自动备份，但跳过重置操作后的启动
+
+      // 启动时创建自动备份，但跳过重置操作后的启动和短时间内的重复启动
       const isResetting = getIsResetting();
-      if (!isResetting) {
+      if (!isResetting && !shouldSkipStartupBackup()) {
         try {
-      await createAutoBackup('app_start');
-    } catch (error) {
-      logError('启动备份失败:', error);
-    }
-      } else {
-        // 清除重置标志
+          await createAutoBackup('app_start');
+          recordStartupTime();
+        } catch (error) {
+          logError('启动备份失败:', error);
+        }
+      } else if (isResetting) {
         setIsResetting(false);
+      } else {
+        logInfo('短时间内重复启动，跳过启动备份');
       }
     } catch (error) {
       log('error', `同步数据失败: ${error}`);
@@ -167,12 +169,16 @@ function App() {
       }
     };
     
-    // 拦截F12/开发者工具（可选，加固安全）- 只在打包后生效
+    // 拦截F12/开发者工具和F5刷新（可选，加固安全）- 只在打包后生效
     const handleKeyDown = (e: KeyboardEvent) => {
       // 检查是否在开发环境中
       const isDev = import.meta.env.DEV;
       if (!isDev) {
         if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (e.key === 'F5') {
           e.preventDefault();
           e.stopPropagation();
         }

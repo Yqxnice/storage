@@ -51,14 +51,97 @@ jobs:
       - name: Build Tauri App
         run: npm run tauri:build -- --target x86_64-pc-windows-msvc
 
+      - name: Generate Signature
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: signature
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $nsisDir = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
+          $files = Get-ChildItem -Path $nsisDir -Filter "*.exe" | Where-Object { $_.Name -notmatch "WebView2" }
+
+          if ($files) {
+            $installerFile = $files | Select-Object -First 1
+            Write-Host "Signing: $($installerFile.FullName)"
+
+            # Set environment variables for tauri signer
+            $env:TAURI_SIGNING_PRIVATE_KEY = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+            $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+
+            # Sign the installer
+            $signature = npx tauri signer sign $installerFile.FullName 2>&1
+
+            # Extract signature from output (format: "Signature: <base64>")
+            $signatureLine = $signature | Where-Object { $_ -match "^Signature:\s*" }
+            if ($signatureLine) {
+              $sig = ($signatureLine -replace "^Signature:\s*", "").Trim()
+              Write-Host "signature=$sig" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+              Write-Host "Signature extracted successfully"
+            } else {
+              Write-Host "Full output: $signature"
+              throw "Failed to extract signature from output"
+            }
+          } else {
+            Write-Host "No NSIS installer found"
+          }
+
+      - name: Create latest.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        needs: signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # Get version from tag
+          $tag = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          $version = $tag.Trim()
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          # Get signature from previous step output
+          $signature = "${{ needs.signature.outputs.signature }}"
+
+          # Find installer files
+          $nsisDir = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
+          $nsisFile = Get-ChildItem -Path $nsisDir -Filter "*.exe" | Where-Object { $_.Name -notmatch "WebView2" } | Select-Object -First 1
+
+          if (-not $nsisFile) {
+            throw "No NSIS installer found"
+          }
+
+          # Build download URL
+          $downloadUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v${version}/$($nsisFile.Name)"
+
+          # Create latest.json
+          $latestJson = @"
+          {
+            "version": "${version}",
+            "notes": "版本 ${version} 更新",
+            "pub_date": "${date}",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "${signature}",
+                "url": "${downloadUrl}"
+              }
+            }
+          }
+"@
+          $latestJson | Out-File -FilePath "latest.json" -Encoding utf8
+          Write-Host "latest.json created for version ${version}"
+          Get-Content "latest.json"
+
       - name: Upload Build Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: |
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**
+            latest.json
             !src-tauri/target/x86_64-pc-windows-msvc/release/build/**
-          retention-days: 30
 
   release:
     needs: build
@@ -83,5 +166,6 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.msi
+            artifacts/**/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

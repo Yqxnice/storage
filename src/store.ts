@@ -45,6 +45,43 @@ export const getIsResetting = () => {
   return false;
 };
 
+// 防抖备份相关
+const SETTINGS_BACKUP_DEBOUNCE = 2000;
+let settingsBackupTimer: number | null = null;
+
+// 防抖 settings_only 备份，合并多次设置修改
+const debouncedSettingsBackup = () => {
+  if (settingsBackupTimer) {
+    clearTimeout(settingsBackupTimer);
+  }
+  settingsBackupTimer = window.setTimeout(() => {
+    if (isStorageInitialized) {
+      useSettingsStore.getState().createAutoBackup('settings_only');
+    }
+    settingsBackupTimer = null;
+  }, SETTINGS_BACKUP_DEBOUNCE);
+};
+
+// 启动间隔检测
+const STARTUP_INTERVAL_KEY = 'lastStartupTime';
+const MIN_STARTUP_INTERVAL = 5 * 60 * 1000; // 5分钟
+
+const shouldSkipStartupBackup = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const lastStartup = localStorage.getItem(STARTUP_INTERVAL_KEY);
+  if (!lastStartup) return false;
+  const interval = Date.now() - parseInt(lastStartup, 10);
+  return interval < MIN_STARTUP_INTERVAL;
+};
+
+const recordStartupTime = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STARTUP_INTERVAL_KEY, Date.now().toString());
+  }
+};
+
+export { shouldSkipStartupBackup, recordStartupTime };
+
 export interface Box {
   id: string;
   name: string;
@@ -149,13 +186,9 @@ export interface AppState extends SettingsState, StorageState {}
 const useSettingsStore = create<SettingsState>()((set) => ({
   viewMode: 'large',
   setViewMode: (mode) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ viewMode: mode });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'viewMode',
         value: mode,
@@ -168,13 +201,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
   
   trayVisible: true,
   setTrayVisible: (visible) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ trayVisible: visible });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'trayVisible',
         value: visible,
@@ -189,14 +218,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     toggleApp: 'Ctrl+Shift+Space'
   },
   setShortcuts: (shortcuts) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
-    // 同步更新状态
     set({ shortcuts });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'shortcuts',
         value: shortcuts,
@@ -210,15 +234,10 @@ const useSettingsStore = create<SettingsState>()((set) => ({
   theme: 'blue',
   timeThemeEnabled: false,
   setTheme: async (theme) => {
-    // 改变设置前先备份
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
-    
     set({ theme });
     applyTheme(theme);
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'theme',
         value: theme,
@@ -229,11 +248,6 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     }
   },
   setTimeThemeEnabled: async (enabled) => {
-    // 改变设置前先备份
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
-    
     set((state) => {
       const newTheme = applyTimeTheme(enabled, state.theme);
       return {
@@ -241,8 +255,8 @@ const useSettingsStore = create<SettingsState>()((set) => ({
         theme: enabled ? newTheme : state.theme
       };
     });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'timeThemeEnabled',
         value: enabled,
@@ -255,13 +269,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
 
   sortByClickCount: true,
   setSortByClickCount: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ sortByClickCount: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'sortByClickCount',
         value: value,
@@ -282,13 +292,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
   scanHiddenFiles: false,
   
   setScanHiddenFiles: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ scanHiddenFiles: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'scanHiddenFiles',
         value: value,
@@ -298,15 +304,11 @@ const useSettingsStore = create<SettingsState>()((set) => ({
       });
     }
   },
-  
+
   setStartOnBoot: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ startOnBoot: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'startOnBoot',
         value: value,
@@ -317,13 +319,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     }
   },
   setStartMinimized: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ startMinimized: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'startMinimized',
         value: value,
@@ -334,13 +332,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     }
   },
   setMinimizeOnClose: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ minimizeOnClose: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'minimizeOnClose',
         value: value,
@@ -351,13 +345,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     }
   },
   setAutoScanDesktop: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ autoScanDesktop: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'autoScanDesktop',
         value: value,
@@ -368,13 +358,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     }
   },
   setHandleInvalidMappings: (value) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ handleInvalidMappings: value });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'handleInvalidMappings',
         value: value,
@@ -385,13 +371,9 @@ const useSettingsStore = create<SettingsState>()((set) => ({
     }
   },
   setAutoBackupInterval: (interval) => {
-    // 先备份设置
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('settings_only');
-    }
     set({ autoBackupInterval: interval });
-    // 只有在存储初始化后才保存设置
     if (isStorageInitialized) {
+      debouncedSettingsBackup();
       tauriIPC.store.set({
         key: 'autoBackupInterval',
         value: interval,
@@ -766,11 +748,6 @@ const useStorageStore = create<StorageState>()((set, get) => ({
   },
   
   addBox: (name) => {
-    // 先备份收纳盒
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('storage_only');
-    }
-    
     const newBox: Box = {
       id: crypto.randomUUID().replace(/-/g, '').substring(0, 6),
       name,
@@ -779,28 +756,22 @@ const useStorageStore = create<StorageState>()((set, get) => ({
     };
     set((state) => {
       const newBoxes = [...state.boxes, newBox];
-      
-      // 异步调用 syncStorageToIPC，不需要等待结果
+
       syncStorageToIPC(newBoxes, state.items, state.activeBoxId);
-      
+
       return { boxes: newBoxes };
     });
     return newBox.id;
   },
-  
+
   updateBox: (id, name) => {
-    // 先备份收纳盒
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('storage_only');
-    }
-    
     set((state) => {
       const newBoxes = state.boxes.map((box) =>
         box.id === id ? { ...box, name } : box
       );
-      
+
       syncStorageToIPC(newBoxes, state.items, state.activeBoxId);
-      
+
       return { boxes: newBoxes };
     });
   },
@@ -848,11 +819,6 @@ const useStorageStore = create<StorageState>()((set, get) => ({
   },
   
   reorderBoxes: (fromIndex, toIndex) => {
-    // 先备份收纳盒
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('storage_only');
-    }
-    
     logDebug('[拖拽] 开始重新排序收纳盒:', fromIndex, '->', toIndex);
     set((state) => {
       if (fromIndex < 0 || fromIndex >= state.boxes.length || toIndex < 0 || toIndex >= state.boxes.length) {
@@ -864,7 +830,7 @@ const useStorageStore = create<StorageState>()((set, get) => ({
       const newBoxes = [...state.boxes];
       const [movedBox] = newBoxes.splice(fromIndex, 1);
       newBoxes.splice(toIndex, 0, movedBox);
-      
+
       logDebug('[拖拽] 新收纳盒顺序:', newBoxes.map(box => box.name));
       syncStorageToIPC(newBoxes, state.items, state.activeBoxId);
 
@@ -875,19 +841,12 @@ const useStorageStore = create<StorageState>()((set, get) => ({
   addItem: async (item) => {
     let existingItem;
     if (item.category === 'desktop' && item.path) {
-      // 修改重复检查逻辑，考虑item.boxId，允许将同一个文件添加到多个收纳盒中
       existingItem = get().items.find(i => i.path === item.path && i.boxId === item.boxId);
     } else if (item.category === 'web' && item.url) {
-      // 修改重复检查逻辑，考虑item.boxId，允许将同一个链接添加到多个收纳盒中
       existingItem = get().items.find(i => i.url === item.url && i.boxId === item.boxId);
     }
     if (existingItem) {
       return;
-    }
-
-    // 先备份收纳盒
-    if (isStorageInitialized) {
-      useSettingsStore.getState().createAutoBackup('storage_only');
     }
 
     const newItem: Item = {
@@ -897,24 +856,20 @@ const useStorageStore = create<StorageState>()((set, get) => ({
       clickCount: 0,
       size: item.size
     };
-    
-    // 先获取当前状态
+
     const currentState = get();
     const newItems = [...currentState.items, newItem];
     const newBoxes = currentState.boxes.map((box) =>
       box.id === item.boxId ? { ...box, itemCount: box.itemCount + 1 } : box
     );
-    
-    // 先更新状态
+
     set({
       items: newItems,
       boxes: newBoxes
     });
-    
-    // 立即同步存储（不防抖），等待同步完成
+
     await syncStorageToIPCImmediately(newBoxes, newItems, currentState.activeBoxId);
-    
-    // 然后发事件通知悬浮窗
+
     emitBoxFloatItemsReload(item.boxId);
   },
   

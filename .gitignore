@@ -63,3 +63,4 @@ data/
 # Documentation files
 *.md
 !README.md
+!UPDATER_GUIDE.md

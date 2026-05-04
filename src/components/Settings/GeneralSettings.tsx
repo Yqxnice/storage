@@ -4,6 +4,8 @@ import { CustomModal, showMessage, CustomRadio, RadioGroup } from '../common';
 import CustomSelect from '../common/CustomSelect';
 import { tauriIPC } from '../../utils/tauri-ipc';
 import { getThemeColors } from '../../utils/theme';
+import { UpdateModal } from '../Updater';
+import { HiRefresh } from 'react-icons/hi';
 
 interface BackupSelectModalProps {
   visible: boolean;
@@ -48,6 +50,7 @@ const BackupSelectModal: React.FC<BackupSelectModalProps> = ({
 
 const GeneralSettings: React.FC = () => {
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [backupsList, setBackupsList] = useState<string[]>([]);
   const [selectedBackup, setSelectedBackup] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
@@ -501,6 +504,22 @@ const GeneralSettings: React.FC = () => {
       <div className="page-card">
         <div className="page-row">
           <div className="page-row-label">
+            <div className="page-row-name">软件更新</div>
+            <div className="page-row-desc">检查并安装最新版本</div>
+          </div>
+          <button
+            className="page-btn"
+            onClick={() => setShowUpdateModal(true)}
+          >
+            <HiRefresh className="w-4 h-4 mr-2 inline" />
+            检查更新
+          </button>
+        </div>
+      </div>
+
+      <div className="page-card">
+        <div className="page-row">
+          <div className="page-row-label">
             <div className="page-row-name">自动清除</div>
             <div className="page-row-desc">自动清理指定天数前的日志</div>
           </div>
@@ -537,6 +556,10 @@ const GeneralSettings: React.FC = () => {
         onSelect={setSelectedBackup}
         onOk={handleBackupRestore}
         onCancel={() => setShowBackupModal(false)}
+      />
+      <UpdateModal
+        visible={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
       />
     </div>
   );

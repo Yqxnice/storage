@@ -1,6 +1,6 @@
 [package]
 name = "storage"
-version = "1.0.0"
+version = "1.1.0"
 description = "桌面文件收纳工具"
 authors = ["Desktop Storage <desktop.storage@example.com>"]
 license = "MIT"
@@ -30,6 +30,7 @@ tauri-plugin-log = "2"
 tauri-plugin-store = "2"
 tauri-plugin-global-shortcut = "2.0.0-beta.17"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 dirs = "5.0.1"
 lazy_static = "1.4.0"
 fs2 = "0.4.3"

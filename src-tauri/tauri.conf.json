@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "StorageApp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.desktopstorage.app",
   "build": {
     "frontendDist": "../dist",
@@ -55,12 +55,16 @@
         "headerImage": null,
         "sidebarImage": null,
         "installMode": "currentUser",
-        "languages": ["English"],
+        "languages": [
+          "English"
+        ],
         "displayLanguageSelector": false,
         "compression": "lzma"
       },
       "wix": {
-        "language": ["en-US"]
+        "language": [
+          "en-US"
+        ]
       }
     },
     "shortDescription": "桌面文件收纳工具",
@@ -73,6 +77,15 @@
     "store": {
       "path": "data/local"
     },
-    "dialog": null
+    "dialog": null,
+    "updater": {
+      "endpoints": [
+        "https://github.com/Yqxnice/storage/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYwMDYxOTBFOUVEOTI5MUIKUldRYktkbWVEaGtHOE5xMFZhNEtyV1l3QW5TWC9aS0JpVEhhT29pK2hsQWRmSFhReVA5anhSejgK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
