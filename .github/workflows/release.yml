@@ -91,7 +91,6 @@ jobs:
 
       - name: Create latest.json
         if: startsWith(github.ref, 'refs/tags/v')
-        needs: signature
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -102,7 +101,7 @@ jobs:
           $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
           # Get signature from previous step output
-          $signature = "${{ needs.signature.outputs.signature }}"
+          $signature = "${{ steps.signature.outputs.signature }}"
 
           # Find installer files
           $nsisDir = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
