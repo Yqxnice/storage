@@ -1,51 +1,42 @@
 :root {
-  /* 基础颜色 - 统一管理 */
-  --bg: #f8f9fa;
-  --surface: #ffffff;
-  --card: #ffffff;
-  --card-hover: #fafbfc;
-  --border: #e9ecef;
-  --border-lit: #dee2e6;
-  --txt: #212529;
-  --txt2: #495057;
-  --txt3: #adb5bd;
+  /* 保持旧变量名兼容 - 映射到新变量系统 */
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --card: var(--color-card);
+  --card-hover: var(--color-card-hover);
+  --border: var(--color-border);
+  --border-lit: var(--color-border-light);
+  --txt: var(--color-text);
+  --txt2: var(--color-text-secondary);
+  --txt3: var(--color-text-tertiary);
   
-  /* 状态颜色 - 统一管理 */
-  --green: #2f9e44;
-  --green-bg: #f1f8f3;
-  --amber: #f59f00;
-  --amber-bg: #fff8e6;
-  --red: #e03131;
-  --red-bg: #ffeaea;
+  --green: var(--color-success-dark);
+  --green-bg: var(--color-success-light);
+  --amber: var(--color-warning);
+  --amber-bg: var(--color-warning-light);
+  --red: var(--color-error-dark);
+  --red-bg: var(--color-error-light);
   
-  /* 主题色 - 默认 */
-  --accent: #4263eb;
-  --accent-bg: #eef2ff;
-  --accent-txt: #364fc7;
-  --accent-hover: #3b5bdb;
-  --accent-border: #4263eb;
+  --accent: var(--color-primary);
+  --accent-bg: var(--color-primary-light);
+  --accent-txt: var(--color-primary-dark);
+  --accent-hover: var(--color-primary-hover);
+  --accent-border: var(--color-primary);
   
-  /* 布局/阴影/过渡变量 */
-  --sidebar: 200px;
-  --titlebar: 38px;
-  --border-radius: 8px;
-  --border-radius-sm: 6px;
-  --border-radius-lg: 10px;
-  --border-radius-xl: 12px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.1);
-  --transition-fast: 0.1s;
-  --transition: 0.15s;
-  --transition-slow: 0.25s;
+  --sidebar: var(--sidebar-width);
+  --titlebar: var(--titlebar-height);
+  --border-radius: var(--radius-md);
+  --border-radius-sm: var(--radius-sm);
+  --border-radius-lg: var(--radius-lg);
+  --border-radius-xl: var(--radius-xl);
+  --shadow-sm: var(--shadow-xs);
+  --shadow: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --transition-fast: var(--transition-fast);
+  --transition: var(--transition-normal);
+  --transition-slow: var(--transition-slow);
   
-  /* 动画贝塞尔曲线 - 更流畅自然 */
-  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  --ease-in-out: cubic-bezier(0.445, 0.05, 0.55, 0.95);
-  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
-  --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
-  
-  /* 主题切换过渡 - 优化性能 */
+  /* 主题切换过渡 */
   transition: background-color var(--transition-slow) var(--ease-in-out),
               color var(--transition-slow) var(--ease-in-out),
               border-color var(--transition-slow) var(--ease-in-out);
@@ -195,8 +186,12 @@ input, textarea, .page-input, select {
   background: var(--bg);
 }
 
-.app-sidebar {
-  width: var(--sidebar);
+.app-sidebar, .side {
+  width: 200px !important;
+  min-width: 200px !important;
+  max-width: 200px !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box;
   background: var(--surface);
   border-right: 0.5px solid var(--border);
   display: flex;
@@ -322,14 +317,7 @@ input, textarea, .page-input, select {
   scrollbar-width: none;
 }
 
-.side {
-  width: var(--sidebar);
-  background: var(--surface);
-  border-right: 0.5px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
+
 
 .side-top {
   padding: 14px 12px 8px;
@@ -801,6 +789,89 @@ input, textarea, .page-input, select {
 .add-slot:active {
   transform: scale(0.98);
 }
+
+/* 分组相关样式 */
+.group-item {
+  margin-bottom: 2px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast) var(--ease-out);
+  color: var(--txt2);
+  font-size: 11px;
+}
+
+.group-header:hover {
+  background: var(--bg);
+}
+
+.group-arrow {
+  font-size: 8px;
+  color: var(--txt3);
+  transition: transform var(--transition-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.group-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.group-count {
+  font-size: 10px;
+  color: var(--txt3);
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.group-boxes {
+  padding-left: 22px;
+  border-left: 0.5px solid var(--border);
+  margin-left: 6px;
+}
+
+.side-bottom-actions {
+  padding: 8px;
+  border-top: 0.5px solid var(--border);
+}
+
+.new-group-btn {
+  width: 100%;
+  padding: 6px 10px;
+  border: 0.5px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt3);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background-color var(--transition-fast) var(--ease-out),
+              border-color var(--transition-fast) var(--ease-out),
+              color var(--transition-fast) var(--ease-out);
+}
+
+.new-group-btn:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+
 
 .add-slot-ico {
   width: 42px;
@@ -1347,7 +1418,37 @@ input, textarea, .page-input, select {
 
 .lib-item.drag-over {
   border-color: var(--accent);
-  background: var(--accent-bg);
-  box-shadow: 0 0 0 2px var(--accent) inset;
-  transform: translateX(5px);
+}
+
+/* 收纳盒颜色圆点 */
+.lib-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+}
+
+/* SortableJS 拖拽排序样式 */
+.sortable-ghost {
+  opacity: 0.4;
+  background: var(--accent-bg) !important;
+}
+
+.sortable-chosen {
+  opacity: 0.8;
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.sortable-drag {
+  opacity: 1;
+  transform: rotate(3deg) scale(1.05);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+.sortable-fallback {
+  background: var(--card);
+  border: 0.5px solid var(--accent);
 }

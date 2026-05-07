@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../../store';
 import { showMessage } from '../common';
 import { CustomInput } from '../common';
-import { CustomCard, CustomTooltip } from '../common';
+import { CustomTooltip } from '../common';
 import { tauriIPC } from '../../utils/tauri-ipc';
 import { getThemeColors } from '../../utils/theme';
 
@@ -140,37 +140,24 @@ const ShortcutsSettings: React.FC = () => {
 
   const handleClick = () => {
     setRecording(true);
-    showMessage.info('请按下快捷键组合（如 Ctrl+Shift+Space）');
+    showMessage.info('请按下快捷键组合');
   };
 
   return (
-    <div className="page-section" style={{ padding: '20px' }}>
-      <h2 style={{ marginBottom: '24px', color: themeColors.txt, fontSize: '18px', fontWeight: 600 }}>快捷键设置</h2>
+    <div className="page-section">
+      <div className="page-section-title">快捷键</div>
 
-      <CustomCard
-        style={{
-          marginBottom: '24px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-          borderRadius: '8px',
-          backgroundColor: themeColors.card,
-          borderColor: themeColors.border
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ flex: 1, marginRight: '20px' }}>
-            <h3 style={{ marginBottom: '8px', color: themeColors.txt, fontSize: '16px', fontWeight: 500 }}>
-              显示/隐藏应用
-            </h3>
-            <p style={{ marginBottom: '0', color: themeColors.txt2, fontSize: '14px' }}>
-              全局快捷键，调出桌面收纳
-            </p>
+      <div className="page-card">
+        <div className="page-row">
+          <div className="page-row-label">
+            <div className="page-row-name">显示/隐藏</div>
+            <div className="page-row-desc">全局快捷键，快速调出收纳</div>
           </div>
-
           <div style={{ minWidth: '200px' }}>
-            <CustomTooltip title={recording ? "正在录制..." : "点击开始录制快捷键"}>
+            <CustomTooltip title={recording ? "录制中..." : "点击录制"}>
               <CustomInput
                 value={shortcutValue}
-                placeholder="点击输入框后按下快捷键"
+                placeholder="点击后按快捷键"
                 readOnly
                 onClick={handleClick}
                 style={{
@@ -187,53 +174,33 @@ const ShortcutsSettings: React.FC = () => {
             </CustomTooltip>
           </div>
         </div>
-      </CustomCard>
+      </div>
 
-      <CustomCard
-        style={{
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-          borderRadius: '8px',
-          backgroundColor: themeColors.card,
-          borderColor: themeColors.border
-        }}
-      >
-        <h3 style={{ marginBottom: '16px', color: themeColors.txt, fontSize: '16px', fontWeight: 500 }}>
-          快捷键示例
-        </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '12px',
-            backgroundColor: themeColors.surface,
-            borderRadius: '4px',
-            border: `1px solid ${themeColors.border}`
-          }}>
-            <span style={{ color: themeColors.txt }}>常用组合键</span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <span className="shortcut-tag">Ctrl+Shift+Space</span>
-              <span className="shortcut-tag">Ctrl+Alt+D</span>
-              <span className="shortcut-tag">Win+E</span>
-            </div>
+      <div className="page-card">
+        <div className="page-row">
+          <div className="page-row-label">
+            <div className="page-row-name">常用示例</div>
+            <div className="page-row-desc">推荐的快捷键组合</div>
           </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '12px',
-            backgroundColor: themeColors.surface,
-            borderRadius: '4px',
-            border: `1px solid ${themeColors.border}`
-          }}>
-            <span style={{ color: themeColors.txt }}>修饰键说明</span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <span className="modifier-tag">Ctrl</span>
-              <span className="modifier-tag">Shift</span>
-              <span className="modifier-tag">Alt</span>
-              <span className="modifier-tag">Win</span>
-            </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span className="shortcut-tag">Ctrl+Shift+Space</span>
+            <span className="shortcut-tag">Ctrl+Alt+D</span>
+            <span className="shortcut-tag">Win+E</span>
           </div>
         </div>
-      </CustomCard>
+        <div className="page-row">
+          <div className="page-row-label">
+            <div className="page-row-name">修饰键</div>
+            <div className="page-row-desc">可用的修饰键</div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span className="modifier-tag">Ctrl</span>
+            <span className="modifier-tag">Shift</span>
+            <span className="modifier-tag">Alt</span>
+            <span className="modifier-tag">Win</span>
+          </div>
+        </div>
+      </div>
 
       <style>
         {`

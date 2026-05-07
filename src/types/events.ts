@@ -28,6 +28,11 @@ export const IPC_CHANNELS = {
   LOGGER_GET_LOGS: 'logger_get_logs',
   LOGGER_WRITE_LOG: 'logger_write_log',
   SET_PORTABLE_MODE: 'set_portable_mode',
+  
+  FILE_WATCH_START: 'file_watch_start',
+  FILE_WATCH_STOP: 'file_watch_stop',
+  FILE_WATCH_STATUS: 'file_watch_status',
+  FILE_WATCH_UPDATE_CONFIG: 'file_watch_update_config',
 } as const;
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];

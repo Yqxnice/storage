@@ -11,15 +11,15 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background-color: #ffffff;
         -webkit-font-smoothing: antialiased;
+        background-color: #ffffff;
       }
       
       #root {
         width: 100%;
         height: 100%;
         opacity: 0;
-        transition: opacity 0.15s ease-out;
+        transition: opacity 0.2s ease-out;
       }
       
       #root.loaded {
@@ -43,6 +43,53 @@
 </head>
 <body>
     <div id="root"></div>
+    <script>
+      function applyTheme() {
+        try {
+          const themeKey = 'settings';
+          const defaultBg = '#ffffff';
+          let bg = defaultBg;
+          
+          const storedData = localStorage.getItem(themeKey);
+          if (storedData) {
+            const data = JSON.parse(storedData);
+            const theme = data.theme;
+            const themeColors = {
+              blue: '#eef2ff',
+              green: '#ebfbee',
+              purple: '#f8f0fc',
+              orange: '#fff4e6',
+              pink: '#fff0f6',
+              cyan: '#e3fafc',
+              dark: '#212529'
+            };
+            if (theme && themeColors[theme]) {
+              bg = themeColors[theme];
+            }
+          }
+          
+          if (document.documentElement) {
+            document.documentElement.style.backgroundColor = bg;
+          }
+          if (document.body) {
+            document.body.style.backgroundColor = bg;
+          }
+        } catch(e) {
+          if (document.documentElement) {
+            document.documentElement.style.backgroundColor = '#ffffff';
+          }
+          if (document.body) {
+            document.body.style.backgroundColor = '#ffffff';
+          }
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyTheme);
+      } else {
+        applyTheme();
+      }
+    </script>
     <script type="module" src="/src/box-float/main.tsx"></script>
 </body>
 </html>

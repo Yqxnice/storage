@@ -17,10 +17,13 @@ import DataPathSelector from './components/DataPathSelector'
 import WelcomeModal from './components/WelcomeModal'
 import { useStore, type Box, type Item, type SettingsState, type OrphanBoxFloat, setStorageInitialized, getIsResetting, setIsResetting, shouldSkipStartupBackup, recordStartupTime } from './store'
 import { restoreOrphanBoxFloatWindows } from './utils/box-float-actions'
+import { preloadBoxFloatMenus } from './utils/box-float-menu-window'
 import { applyTheme } from './utils/theme'
 import { tauriIPC, IPC_CHANNELS } from './utils/tauri-ipc'
 import { listen } from '@tauri-apps/api/event'
 import { logDebug, logInfo, logError } from './utils/logger'
+import { APP_INFO } from './constants'
+import { useWindowLayout } from './hooks'
 import './styles/app.css'
 
 /**
@@ -42,6 +45,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState<'home' | 'settings'>('home')
   const [showDataPathSelector, setShowDataPathSelector] = useState(false)
   const [showWelcomeModal, setShowWelcomeModal] = useState(false)
+  
+  useWindowLayout()
 
   // 全局阻止原生右键菜单
   useEffect(() => {
@@ -52,6 +57,13 @@ function App() {
     return () => {
       document.removeEventListener('contextmenu', preventDefaultContextMenu);
     };
+  }, []);
+
+  // 预加载菜单系统（零延迟启动！）
+  useEffect(() => {
+    preloadBoxFloatMenus().catch((err) => {
+      logDebug('菜单预加载跳过:', err);
+    });
   }, []);
 
 /**
@@ -190,38 +202,21 @@ function App() {
     document.addEventListener('keydown', handleKeyDown);
     
     const initApp = async () => {
-      // 不使用log函数，避免在存储初始化前创建日志文件夹
-      console.log('应用开始初始化');
       try {
-        // 检查是否已经初始化
         const hasInitialized = await tauriIPC.store.get({ key: 'hasInitialized', storeType: STORAGE_TYPE.SETTINGS });
         const hasShownWelcome = await tauriIPC.store.get({ key: 'hasShownWelcome', storeType: STORAGE_TYPE.SETTINGS });
         
-        console.log(`初始化检查: hasInitialized=${hasInitialized}, hasShownWelcome=${hasShownWelcome}`);
-        
-        // 只有在未初始化或未显示欢迎弹窗时才显示
-         console.log(!hasInitialized || !hasShownWelcome,'1111111111');
         if (!hasInitialized || !hasShownWelcome) {
-          console.log(!hasInitialized || !hasShownWelcome,'2222222222');
-          
-          console.log('显示欢迎弹窗');
           setShowWelcomeModal(true);
-          // 初始化主题 - 使用默认主题，避免在未选择存储路径时访问存储
           const defaultTheme = THEME_DEFAULT;
           setTheme(defaultTheme);
           applyTheme(defaultTheme);
-          console.log(`应用初始化完成，主题: ${defaultTheme}`);
         } else {
-          console.log('已经初始化，跳过欢迎弹窗');
-          // 标记存储已初始化
           setStorageInitialized(true);
-          // 设置全局存储初始化标记
           if (typeof window !== 'undefined') {
             (window as any).storageInitialized = true;
           }
-          // 同步数据
           await syncAppData();
-          // 初始化主题
           const defaultTheme = THEME_DEFAULT;
           setTheme(defaultTheme);
           applyTheme(defaultTheme);
@@ -229,7 +224,6 @@ function App() {
         }
       } catch (error) {
         console.error(`初始化失败: ${error}`);
-        // 应用默认主题
         applyTheme(THEME_DEFAULT);
       }
     };
@@ -502,9 +496,16 @@ function App() {
     // 关闭欢迎弹窗
     setShowWelcomeModal(false);
     
-    // 直接显示数据路径选择对话框
-    // 这样可以确保在用户选择存储路径之前，不会有任何存储操作
-    setShowDataPathSelector(true);
+    // 检查是否为便携版（通过检测可执行文件目录下是否存在 .portable 文件）
+    const isPortable = await tauriIPC.invoke<boolean>('is_portable_mode', {}).catch(() => false);
+    
+    if (isPortable) {
+      // 便携版：显示数据路径选择对话框
+      setShowDataPathSelector(true);
+    } else {
+      // 安装包版：直接使用安装路径，不显示路径选择
+      await handleDataPathSelect('current');
+    }
   };
 
 /**
@@ -515,15 +516,15 @@ function App() {
  * 4. 保存默认设置
  * 5. 同步数据到应用状态
  * 6. 首次安装时创建桌面收纳盒并扫描桌面文件
- * @param storageLocation 存储位置（'appdata' 或 'current'）
+ * @param storageLocation 存储位置（'appdata'、'current' 或自定义路径）
  */
   const handleDataPathSelect = async (storageLocation: string) => {
     try {
       // 设置便携模式：如果用户选择当前目录，则启用便携模式
       const isPortable = storageLocation === 'current';
       await tauriIPC.setPortableMode(isPortable);
-      
-      // 保存存储位置
+
+      // 保存存储位置（如果是自定义路径，直接保存完整路径）
       await tauriIPC.store.set({ key: 'dataPath', value: storageLocation, storeType: STORAGE_TYPE.SETTINGS });
       
       // 标记为已初始化
@@ -613,7 +614,7 @@ function App() {
 
   return (
     <div className="shell">
-      <TitleBar title="桌面收纳" />
+      <TitleBar title={APP_INFO.NAME} />
       {currentPage === 'home' ? (
         <Home activeNav="home" onNavClick={handleNavClick} />
       ) : (

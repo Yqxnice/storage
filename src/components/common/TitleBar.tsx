@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { tauriIPC, PlatformType } from '../../utils/tauri-ipc'
+import { APP_INFO } from '../../constants'
 
-function TitleBarWin({ title = '桌面收纳' }) {
+function TitleBarWin({ title }: { title?: string }) {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -12,7 +13,7 @@ function TitleBarWin({ title = '桌面收纳' }) {
     <div style={styles.winBar}>
       <div style={styles.winLeft}>
         <span style={styles.winAppIcon}>🗂️</span>
-        <span style={styles.winTitle}>{title}</span>
+        <span style={styles.winTitle}>{title || APP_INFO.NAME}</span>
       </div>
 
       <div style={styles.winControls}>
@@ -58,7 +59,7 @@ function WinButton({ children, onClick, ariaLabel, danger }: { children: React.R
   )
 }
 
-function TitleBarMac({ title = '桌面收纳' }: { title?: string }) {
+function TitleBarMac({ title }: { title?: string }) {
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -87,7 +88,7 @@ function TitleBarMac({ title = '桌面收纳' }: { title?: string }) {
         </MacDot>
       </div>
 
-      <span style={styles.macTitle}>{title}</span>
+      <span style={styles.macTitle}>{title || APP_INFO.NAME}</span>
     </div>
   )
 }
@@ -103,8 +104,13 @@ function MacDot({ color, hovered, onClick, children }: { color: string; hovered:
 }
 
 export default function TitleBar(props: { title?: string }) {
-  const platform = tauriIPC.platform ?? PlatformType.Win32
-  return (platform as string) === PlatformType.Darwin
+  const [platform, setPlatform] = useState<PlatformType>(PlatformType.Win32)
+
+  useEffect(() => {
+    tauriIPC.platform.then(setPlatform).catch(() => {})
+  }, [])
+
+  return platform === PlatformType.Darwin
     ? <TitleBarMac {...props} />
     : <TitleBarWin {...props} />
 }

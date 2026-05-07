@@ -1,9 +1,17 @@
+
 /* 紫色主题 */
 
 [data-theme="purple"] {
   --color-primary: #be4bdb;
-  --color-primary-bg: #f8f0fc;
-  --color-primary-text: #9c36b5;
+  --color-primary-light: #f8f0fc;
+  --color-primary-dark: #9c36b5;
   --color-primary-hover: #ae3ec9;
-  --color-primary-border: #be4bdb;
+  --color-primary-active: #9c36b5;
+  
+  /* 兼容旧变量名 */
+  --accent: #be4bdb;
+  --accent-bg: #f8f0fc;
+  --accent-txt: #9c36b5;
+  --accent-hover: #ae3ec9;
+  --accent-border: #be4bdb;
 }

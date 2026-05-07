@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function useEvent<T extends Event>(
   eventName: string,
@@ -30,29 +30,28 @@ export function useTauriEvent<T>(
   handler: (payload: T) => void
 ) {
   const handlerRef = useRef(handler);
-  const unlistenRef = useRef<(() => void) | Promise<() => void> | null>(null);
 
   useEffect(() => {
     handlerRef.current = handler;
   }, [handler]);
 
   useEffect(() => {
-    let cancelled = false;
+    const abortController = new AbortController();
 
     const setupListener = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
         const unlisten = await listen<T>(eventName, (event) => {
-          if (!cancelled) {
-            handlerRef.current(event.payload);
-          }
+          if (abortController.signal.aborted) return;
+          handlerRef.current(event.payload);
         });
 
-        if (!cancelled) {
-          unlistenRef.current = unlisten;
-        } else {
-          await unlisten();
-        }
+        abortController.signal.addEventListener('abort', () => {
+          try {
+            unlisten();
+          } catch {
+          }
+        });
       } catch (error) {
         console.error(`Failed to setup Tauri event listener for ${eventName}:`, error);
       }
@@ -61,18 +60,7 @@ export function useTauriEvent<T>(
     setupListener();
 
     return () => {
-      cancelled = true;
-      const cleanup = async () => {
-        if (unlistenRef.current) {
-          try {
-            const unlisten = await unlistenRef.current;
-            unlisten();
-          } catch (error) {
-            console.error('Failed to cleanup Tauri event listener:', error);
-          }
-        }
-      };
-      cleanup();
+      abortController.abort();
     };
   }, [eventName]);
 }

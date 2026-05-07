@@ -4,7 +4,7 @@ import type { Box, Item, OrphanBoxFloat } from '../store'
 import { useStorageStore } from '../store'
 import { tauriIPC } from './tauri-ipc'
 import { floatLabelFromFloatWindowId, BOXFLOAT_ORPHAN_MENU_BOX_ID, generateShortFloatWindowId, compactFloatWindowId } from './box-float-labels'
-import { closeBoxFloatMenuWindow } from './box-float-menu-window'
+import { closeBoxFloatMenuWindow, preloadBoxFloatMenuForFloat } from './box-float-menu-window'
 import { emitBoxFloatItemsReload } from './box-float-notify'
 import { logError } from './logger'
 
@@ -105,6 +105,45 @@ async function waitWebviewCreated(win: WebviewWindow): Promise<void> {
   })
 }
 
+interface CreateWebviewOptions {
+  label: string
+  url: string
+  title: string
+  floatWindowId: string
+  boxId?: string
+}
+
+async function createWebview(options: CreateWebviewOptions): Promise<void> {
+  const { label, url, title, floatWindowId, boxId } = options
+  
+  const win = new WebviewWindow(label, {
+    url,
+    title,
+    width: 300,
+    height: 440,
+    minWidth: 260,
+    minHeight: 52,
+    maxWidth: 500,
+    maxHeight: 600,
+    resizable: true,
+    maximizable: false,
+    minimizable: false,
+    closable: false,
+    alwaysOnTop: !import.meta.env.DEV,
+    transparent: true,
+    backgroundColor: '#ffffff',
+    decorations: false,
+    shadow: true,
+    skipTaskbar: true,
+    center: true,
+    visible: false,
+  })
+  
+  preloadBoxFloatMenuForFloat(floatWindowId, boxId, label).catch(() => {})
+  
+  await waitWebviewCreated(win)
+}
+
 async function createWebviewForFloat(
   boxId: string,
   boxName: string,
@@ -112,69 +151,26 @@ async function createWebviewForFloat(
 ): Promise<void> {
   const label = floatLabelFromFloatWindowId(floatWindowId)
   const url = buildBoxFloatUrl(boxId, floatWindowId, boxName)
-  const win = new WebviewWindow(label, {
+  
+  await createWebview({
+    label,
     url,
     title: boxName,
-    width: 300,
-    height: 440,
-    minWidth: 260,
-    minHeight: 52,
-    maxWidth: 500,
-    maxHeight: 600,
-    resizable: true,
-    maximizable: false,
-    minimizable: false,
-    closable: false, // 禁用关闭按钮
-    alwaysOnTop: !import.meta.env.DEV,
-    transparent: false,
-    decorations: false,
-    shadow: true,
-    skipTaskbar: true,
-    center: true,
-    visible: false, // 先隐藏，防止闪烁
+    floatWindowId,
+    boxId,
   })
-  
-  await waitWebviewCreated(win)
-  
-  // 显示窗口，使用平滑过渡
-  setTimeout(() => {
-    win.show().catch(() => {})
-    win.setFocus().catch(() => {})
-  }, 100)
 }
 
 async function createWebviewForOrphanFloat(floatWindowId: string, title: string): Promise<void> {
   const label = floatLabelFromFloatWindowId(floatWindowId)
   const url = buildOrphanBoxFloatUrl(floatWindowId, title)
-  const win = new WebviewWindow(label, {
+  
+  await createWebview({
+    label,
     url,
     title: title || 'Welcome',
-    width: 300,
-    height: 440,
-    minWidth: 260,
-    minHeight: 52,
-    maxWidth: 500,
-    maxHeight: 600,
-    resizable: true,
-    maximizable: false,
-    minimizable: false,
-    closable: false, // 禁用关闭按钮
-    alwaysOnTop: !import.meta.env.DEV,
-    transparent: false,
-    decorations: false,
-    shadow: true,
-    skipTaskbar: true,
-    center: true,
-    visible: false, // 先隐藏，防止闪烁
+    floatWindowId,
   })
-  
-  await waitWebviewCreated(win)
-  
-  // 显示窗口，使用平滑过渡
-  setTimeout(() => {
-    win.show().catch(() => {})
-    win.setFocus().catch(() => {})
-  }, 100)
 }
 
 /** 主窗口：新建悬浮窗 id、写入状态与磁盘并打开 */

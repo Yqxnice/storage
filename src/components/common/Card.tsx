@@ -38,9 +38,9 @@ const Card: React.FC<CardProps> = ({
     <div
       className={className}
       style={{
-        borderRadius: '8px',
-        padding: '16px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+        borderRadius: 'var(--radius-md)',
+        padding: 'var(--spacing-xl)',
+        boxShadow: 'var(--shadow-md)',
         ...getVariantStyles(),
         ...style
       }}

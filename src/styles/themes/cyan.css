@@ -1,9 +1,17 @@
+
 /* 青色主题 */
 
 [data-theme="cyan"] {
   --color-primary: #15aabf;
-  --color-primary-bg: #e3fafc;
-  --color-primary-text: #0c8599;
+  --color-primary-light: #e3fafc;
+  --color-primary-dark: #0c8599;
   --color-primary-hover: #1098ad;
-  --color-primary-border: #15aabf;
+  --color-primary-active: #0c8599;
+  
+  /* 兼容旧变量名 */
+  --accent: #15aabf;
+  --accent-bg: #e3fafc;
+  --accent-txt: #0c8599;
+  --accent-hover: #1098ad;
+  --accent-border: #15aabf;
 }

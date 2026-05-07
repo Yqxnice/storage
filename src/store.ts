@@ -5,6 +5,8 @@ import { showMessage } from './components/common';
 import { emitBoxFloatItemsReload } from './utils/box-float-notify';
 import { destroyBoxFloatWebviews } from './utils/box-float-destroy';
 import { logDebug, logInfo, logError } from './utils/logger';
+import { emit } from '@tauri-apps/api/event';
+
 
 // 控制是否保存设置到存储
 let isStorageInitialized = false;
@@ -89,6 +91,8 @@ export interface Box {
   createdAt: number;
   /** 收纳盒专属悬浮窗 Webview 的实例 id；关闭悬浮窗会清除，不影响收纳盒 */
   floatWindowId?: string;
+  color?: string; // 配色标签颜色
+  groupId?: string; // 分组ID
 }
 
 export interface Item {
@@ -103,6 +107,15 @@ export interface Item {
   addedAt: number;
   clickCount: number;
   size?: number;
+  order?: number;
+}
+
+export interface BoxGroup {
+  id: string;
+  name: string;
+  order: number;
+  collapsed: boolean;
+  boxIds: string[];
 }
 
 /**
@@ -130,6 +143,15 @@ export interface SettingsState {
   logAutoCleanupDays: string;
   scanHiddenFiles: boolean;
   setScanHiddenFiles: (value: boolean) => void;
+  
+  fileWatchEnabled: boolean;
+  fileWatchPaths: string[];
+  fileWatchIgnorePatterns: string[];
+  fileWatchDebounceDelay: number;
+  setFileWatchEnabled: (enabled: boolean) => void;
+  setFileWatchPaths: (paths: string[]) => void;
+  setFileWatchIgnorePatterns: (patterns: string[]) => void;
+  setFileWatchDebounceDelay: (delay: number) => void;
   setViewMode: (mode: 'large' | 'small' | 'list') => void;
   setTrayVisible: (visible: boolean) => void;
   setShortcuts: (shortcuts: Record<string, string>) => void;
@@ -158,8 +180,9 @@ interface StorageState {
   items: Item[];
   activeBoxId: string | null;
   orphanBoxFloats: OrphanBoxFloat[];
-  addBox: (name: string) => string;
-  updateBox: (id: string, name: string) => void;
+  groups: BoxGroup[];
+  addBox: (name: string, groupId?: string) => string;
+  updateBox: (id: string, updates: Partial<Pick<Box, 'name' | 'color' | 'groupId'>>) => void;
   deleteBox: (id: string) => void;
   setActiveBox: (id: string) => void;
   reorderBoxes: (fromIndex: number, toIndex: number) => void;
@@ -168,17 +191,26 @@ interface StorageState {
   moveItem: (id: string, boxId: string) => Promise<void>;
   reorderItems: (fromIndex: number, toIndex: number) => void;
   updateItemName: (id: string, name: string) => void;
+  updateItemOrder: (id: string, order: number) => void;
   incrementClickCount: (id: string) => void;
   syncFromTauriStore: (data: {
     boxes: Box[];
     items: Item[];
     activeBoxId: string | null;
     orphanBoxFloats?: OrphanBoxFloat[];
+    groups?: BoxGroup[];
   }) => void;
   /** 仅更新内存中收纳盒的悬浮窗 id（不写盘；写盘由 box-float-actions.persistBoxFloatMeta 负责） */
   setBoxFloatWindowId: (boxId: string, floatWindowId: string | null) => void;
   addOrphanBoxFloat: (row: OrphanBoxFloat) => void;
   removeOrphanBoxFloat: (floatWindowId: string) => void;
+  setBoxColor: (boxId: string, color: string) => void;
+  
+  addGroup: (name: string) => string;
+  updateGroup: (id: string, updates: Partial<BoxGroup>) => void;
+  deleteGroup: (id: string, moveBoxesTo?: string) => void;
+  moveBoxToGroup: (boxId: string, groupId?: string) => void;
+  toggleGroupCollapse: (groupId: string) => void;
 }
 
 export interface AppState extends SettingsState, StorageState {}
@@ -291,6 +323,11 @@ const useSettingsStore = create<SettingsState>()((set) => ({
   logAutoCleanupDays: '2',
   scanHiddenFiles: false,
   
+  fileWatchEnabled: false,
+  fileWatchPaths: [],
+  fileWatchIgnorePatterns: ['node_modules', '.git'],
+  fileWatchDebounceDelay: 500,
+  
   setScanHiddenFiles: (value) => {
     set({ scanHiddenFiles: value });
     if (isStorageInitialized) {
@@ -301,6 +338,68 @@ const useSettingsStore = create<SettingsState>()((set) => ({
         storeType: 'settings'
       }).catch(async (error) => {
         await log('ERROR', `保存设置 scanHiddenFiles 失败: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  },
+
+  setFileWatchEnabled: async (enabled) => {
+    set({ fileWatchEnabled: enabled });
+    if (isStorageInitialized) {
+      debouncedSettingsBackup();
+      tauriIPC.store.set({
+        key: 'fileWatchEnabled',
+        value: enabled,
+        storeType: 'settings'
+      }).catch(async (error) => {
+        await log('ERROR', `保存设置 fileWatchEnabled 失败: ${error instanceof Error ? error.message : String(error)}`);
+      });
+      
+      if (enabled) {
+        await tauriIPC.fileWatch.start();
+      } else {
+        await tauriIPC.fileWatch.stop();
+      }
+    }
+  },
+
+  setFileWatchPaths: (paths) => {
+    set({ fileWatchPaths: paths });
+    if (isStorageInitialized) {
+      debouncedSettingsBackup();
+      tauriIPC.store.set({
+        key: 'fileWatchPaths',
+        value: paths,
+        storeType: 'settings'
+      }).catch(async (error) => {
+        await log('ERROR', `保存设置 fileWatchPaths 失败: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  },
+
+  setFileWatchIgnorePatterns: (patterns) => {
+    set({ fileWatchIgnorePatterns: patterns });
+    if (isStorageInitialized) {
+      debouncedSettingsBackup();
+      tauriIPC.store.set({
+        key: 'fileWatchIgnorePatterns',
+        value: patterns,
+        storeType: 'settings'
+      }).catch(async (error) => {
+        await log('ERROR', `保存设置 fileWatchIgnorePatterns 失败: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  },
+
+  setFileWatchDebounceDelay: (delay) => {
+    set({ fileWatchDebounceDelay: delay });
+    if (isStorageInitialized) {
+      debouncedSettingsBackup();
+      tauriIPC.store.set({
+        key: 'fileWatchDebounceDelay',
+        value: delay,
+        storeType: 'settings'
+      }).catch(async (error) => {
+        await log('ERROR', `保存设置 fileWatchDebounceDelay 失败: ${error instanceof Error ? error.message : String(error)}`);
       });
     }
   },
@@ -487,7 +586,11 @@ const useSettingsStore = create<SettingsState>()((set) => ({
         handleInvalidMappings: true,
         autoBackupInterval: '10min',
         logAutoCleanupDays: '2',
-        scanHiddenFiles: false
+        scanHiddenFiles: false,
+        fileWatchEnabled: false,
+        fileWatchPaths: [],
+        fileWatchIgnorePatterns: ['node_modules', '.git'],
+        fileWatchDebounceDelay: 500
       };
       
       set(defaultSettings);
@@ -559,7 +662,11 @@ const useSettingsStore = create<SettingsState>()((set) => ({
           handleInvalidMappings: true,
           autoBackupInterval: '10min',
           logAutoCleanupDays: '2',
-          scanHiddenFiles: false
+          scanHiddenFiles: false,
+          fileWatchEnabled: false,
+          fileWatchPaths: [],
+          fileWatchIgnorePatterns: ['node_modules', '.git'],
+          fileWatchDebounceDelay: 500
         };
         
         // 保存所有默认设置
@@ -671,6 +778,7 @@ const performSyncStorageToIPC = async (
   boxes: Box[],
   items: Item[],
   activeBoxId: string | null,
+  groups?: BoxGroup[],
   orphanBoxFloats?: OrphanBoxFloat[],
 ) => {
   // 只有在存储初始化后才同步数据
@@ -680,6 +788,7 @@ const performSyncStorageToIPC = async (
 
   const orphans =
     orphanBoxFloats !== undefined ? orphanBoxFloats : useStorageStore.getState().orphanBoxFloats;
+  const storeGroups = groups !== undefined ? groups : useStorageStore.getState().groups;
 
   try {
     await tauriIPC.store.set({
@@ -688,6 +797,7 @@ const performSyncStorageToIPC = async (
         boxes,
         items,
         activeBoxId,
+        groups: storeGroups,
         orphanBoxFloats: orphans,
       },
       storeType: 'storage',
@@ -731,6 +841,7 @@ const useStorageStore = create<StorageState>()((set, get) => ({
   items: [],
   activeBoxId: null,
   orphanBoxFloats: [],
+  groups: [],
 
   addOrphanBoxFloat: (row) => {
     set((state) => {
@@ -747,27 +858,38 @@ const useStorageStore = create<StorageState>()((set, get) => ({
     persistOrphanListAfterChange();
   },
   
-  addBox: (name) => {
+  addBox: (name, groupId) => {
     const newBox: Box = {
       id: crypto.randomUUID().replace(/-/g, '').substring(0, 6),
       name,
       itemCount: 0,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      groupId
     };
     set((state) => {
       const newBoxes = [...state.boxes, newBox];
+      let newGroups = state.groups;
+      
+      if (groupId) {
+        newGroups = state.groups.map(group => {
+          if (group.id === groupId && !group.boxIds.includes(newBox.id)) {
+            return { ...group, boxIds: [...group.boxIds, newBox.id] };
+          }
+          return group;
+        });
+      }
 
-      syncStorageToIPC(newBoxes, state.items, state.activeBoxId);
+      syncStorageToIPC(newBoxes, state.items, state.activeBoxId, newGroups);
 
-      return { boxes: newBoxes };
+      return { boxes: newBoxes, groups: newGroups };
     });
     return newBox.id;
   },
 
-  updateBox: (id, name) => {
+  updateBox: (id, updates) => {
     set((state) => {
       const newBoxes = state.boxes.map((box) =>
-        box.id === id ? { ...box, name } : box
+        box.id === id ? { ...box, ...updates } : box
       );
 
       syncStorageToIPC(newBoxes, state.items, state.activeBoxId);
@@ -775,7 +897,24 @@ const useStorageStore = create<StorageState>()((set, get) => ({
       return { boxes: newBoxes };
     });
   },
-  
+
+  setBoxColor: (boxId, color) => {
+    set((state) => {
+      const newBoxes = state.boxes.map((box) =>
+        box.id === boxId ? { ...box, color } : box
+      )
+
+      // 使用立即同步，确保数据先写入存储
+      void (async () => {
+        await syncStorageToIPCImmediately(newBoxes, state.items, state.activeBoxId)
+        // 数据写入后再发送事件
+        await emit('box-float-storage-updated', { boxId })
+      })()
+
+      return { boxes: newBoxes }
+    })
+  },
+
   deleteBox: async (id) => {
     const floatFid = get().boxes.find((b) => b.id === id)?.floatWindowId;
 
@@ -792,12 +931,18 @@ const useStorageStore = create<StorageState>()((set, get) => ({
         ? (newBoxes.find((box) => box.id !== id)?.id || null) 
         : state.activeBoxId;
       
-      syncStorageToIPC(newBoxes, newItems, newActiveBoxId);
+      const newGroups = state.groups.map(group => ({
+        ...group,
+        boxIds: group.boxIds.filter(boxId => boxId !== id)
+      }));
+      
+      syncStorageToIPC(newBoxes, newItems, newActiveBoxId, newGroups);
       
       return {
         boxes: newBoxes,
         items: newItems,
-        activeBoxId: newActiveBoxId
+        activeBoxId: newActiveBoxId,
+        groups: newGroups
       };
     });
 
@@ -944,11 +1089,13 @@ const useStorageStore = create<StorageState>()((set, get) => ({
   
   reorderItems: (fromIndex, toIndex) => {
     const activeBoxId = get().activeBoxId;
+    console.log('[Store] reorderItems 被调用', { fromIndex, toIndex, activeBoxId });
     set((state) => {
       const boxItems = state.items.filter(item => item.boxId === activeBoxId);
       const otherItems = state.items.filter(item => item.boxId !== activeBoxId);
 
       if (fromIndex < 0 || fromIndex >= boxItems.length || toIndex < 0 || toIndex >= boxItems.length) {
+        console.log('[Store] reorderItems 索引无效');
         return state;
       }
 
@@ -956,8 +1103,14 @@ const useStorageStore = create<StorageState>()((set, get) => ({
       const [movedItem] = newBoxItems.splice(fromIndex, 1);
       newBoxItems.splice(toIndex, 0, movedItem);
       
-      const newItems = [...newBoxItems, ...otherItems];
+      const updatedBoxItems = newBoxItems.map((item, index) => ({
+        ...item,
+        order: index
+      }));
       
+      const newItems = [...updatedBoxItems, ...otherItems];
+      
+      console.log('[Store] reorderItems 完成，新顺序:', updatedBoxItems.map(i => i.name));
       syncStorageToIPC(state.boxes, newItems, state.activeBoxId);
 
       return { items: newItems };
@@ -973,9 +1126,25 @@ const useStorageStore = create<StorageState>()((set, get) => ({
       const newItems = state.items.map((item) =>
         item.id === id ? { ...item, name } : item
       );
-      
+
       syncStorageToIPC(state.boxes, newItems, state.activeBoxId);
-      
+
+      return { items: newItems };
+    });
+    if (prev) {
+      emitBoxFloatItemsReload(prev.boxId);
+    }
+  },
+
+  updateItemOrder: (id, order) => {
+    const prev = get().items.find((i) => i.id === id);
+    set((state) => {
+      const newItems = state.items.map((item) =>
+        item.id === id ? { ...item, order } : item
+      );
+
+      syncStorageToIPC(state.boxes, newItems, state.activeBoxId);
+
       return { items: newItems };
     });
     if (prev) {
@@ -989,6 +1158,7 @@ const useStorageStore = create<StorageState>()((set, get) => ({
       items: data.items || [],
       activeBoxId: data.activeBoxId || null,
       orphanBoxFloats: Array.isArray(data.orphanBoxFloats) ? data.orphanBoxFloats : [],
+      groups: Array.isArray(data.groups) ? data.groups : [],
     });
   },
 
@@ -1003,6 +1173,98 @@ const useStorageStore = create<StorageState>()((set, get) => ({
         return { ...b, floatWindowId }
       }),
     }))
+  },
+
+  addGroup: (name) => {
+    const newGroup: BoxGroup = {
+      id: crypto.randomUUID().replace(/-/g, '').substring(0, 6),
+      name,
+      order: get().groups.length,
+      collapsed: false,
+      boxIds: []
+    };
+    set((state) => {
+      const newGroups = [...state.groups, newGroup];
+      syncStorageToIPC(state.boxes, state.items, state.activeBoxId, newGroups);
+      return { groups: newGroups };
+    });
+    return newGroup.id;
+  },
+
+  updateGroup: (id, updates) => {
+    set((state) => {
+      const newGroups = state.groups.map(group =>
+        group.id === id ? { ...group, ...updates } : group
+      );
+      syncStorageToIPC(state.boxes, state.items, state.activeBoxId, newGroups);
+      return { groups: newGroups };
+    });
+  },
+
+  deleteGroup: (id, moveBoxesTo) => {
+    set((state) => {
+      const groupToDelete = state.groups.find(g => g.id === id);
+      let newBoxes = state.boxes;
+      let newGroups = state.groups.filter(g => g.id !== id);
+      
+      if (groupToDelete && moveBoxesTo) {
+        newBoxes = state.boxes.map(box => 
+          groupToDelete.boxIds.includes(box.id) 
+            ? { ...box, groupId: moveBoxesTo } 
+            : box
+        );
+        newGroups = newGroups.map(group => 
+          group.id === moveBoxesTo
+            ? { ...group, boxIds: [...group.boxIds, ...groupToDelete.boxIds] }
+            : group
+        );
+      } else if (groupToDelete) {
+        newBoxes = state.boxes.map(box => 
+          groupToDelete.boxIds.includes(box.id) 
+            ? { ...box, groupId: undefined } 
+            : box
+        );
+      }
+      
+      syncStorageToIPC(newBoxes, state.items, state.activeBoxId, newGroups);
+      return { boxes: newBoxes, groups: newGroups };
+    });
+  },
+
+  moveBoxToGroup: (boxId, groupId) => {
+    set((state) => {
+      const box = state.boxes.find(b => b.id === boxId);
+      if (!box) return state;
+      
+      const oldGroupId = box.groupId;
+      
+      let newGroups = state.groups.map(group => {
+        if (group.id === oldGroupId) {
+          return { ...group, boxIds: group.boxIds.filter(id => id !== boxId) };
+        }
+        if (group.id === groupId) {
+          return { ...group, boxIds: [...group.boxIds, boxId] };
+        }
+        return group;
+      });
+      
+      const newBoxes = state.boxes.map(b => 
+        b.id === boxId ? { ...b, groupId } : b
+      );
+      
+      syncStorageToIPC(newBoxes, state.items, state.activeBoxId, newGroups);
+      return { boxes: newBoxes, groups: newGroups };
+    });
+  },
+
+  toggleGroupCollapse: (groupId) => {
+    set((state) => {
+      const newGroups = state.groups.map(group =>
+        group.id === groupId ? { ...group, collapsed: !group.collapsed } : group
+      );
+      syncStorageToIPC(state.boxes, state.items, state.activeBoxId, newGroups);
+      return { groups: newGroups };
+    });
   },
 }));
 

@@ -1,9 +1,17 @@
+
 /* 橙色主题 */
 
 [data-theme="orange"] {
   --color-primary: #fd7e14;
-  --color-primary-bg: #fff4e6;
-  --color-primary-text: #e67700;
+  --color-primary-light: #fff4e6;
+  --color-primary-dark: #e67700;
   --color-primary-hover: #f76707;
-  --color-primary-border: #fd7e14;
+  --color-primary-active: #e67700;
+  
+  /* 兼容旧变量名 */
+  --accent: #fd7e14;
+  --accent-bg: #fff4e6;
+  --accent-txt: #e67700;
+  --accent-hover: #f76707;
+  --accent-border: #fd7e14;
 }

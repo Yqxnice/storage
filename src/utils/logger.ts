@@ -33,7 +33,7 @@ const ENABLE_CONSOLE = import.meta.env.DEV;
  * @param level 日志级别
  * @param args 日志内容
  */
-export function logMessage(level: LogLevel, ...args: any[]): void {
+export function logMessage(level: LogLevel, ...args: unknown[]): void {
   const levelNum = LOG_LEVELS[level];
   if (levelNum >= CURRENT_LOG_LEVEL) {
     const timestamp = new Date().toISOString();

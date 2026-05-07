@@ -1,47 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-
-// 工具函数
-const validateNonEmpty = (value: string, msg: string) => {
-  if (!value || value.trim() === "") {
-    throw new Error(msg);
-  }
-};
-
-// 校验 command 参数
-const validateCommand = (command: string) => {
-  if (!command || typeof command !== "string" || command.trim() === "") {
-    throw new Error("IPC调用失败：command必须是非空字符串");
-  }
-};
-
-// 统一错误处理函数
-const handleError = (error: unknown, context: string) => {
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  throw new Error(`${context} 失败: ${errorMessage}`);
-};
-
-// 验证路径或URL是否有效
-const isValidPathOrUrl = (path: string): boolean => {
-  // 检查是否为有效的URL
-  try {
-    new URL(path);
-    return true;
-  } catch {
-    // 不是URL，检查是否为有效的文件路径
-    // 基本的路径验证：不包含非法字符，且不是只包含路径分隔符
-    const illegalChars = /[<>:"|?*]/;
-    if (illegalChars.test(path)) {
-      return false;
-    }
-    // 检查是否为绝对路径（Windows 或 Unix）
-    const isAbsolutePath = /^[a-zA-Z]:\\|^\\|^\//.test(path);
-    // 检查是否为相对路径
-    const isRelativePath = /^[.\\/].*/.test(path);
-    return isAbsolutePath || isRelativePath;
-  }
-};
+import { validateNonEmpty, validateCommand, handleError, isValidPathOrUrl } from "./helpers";
 
 // 带超时的 invoke 调用
 const invokeWithTimeout = async <T = unknown>(
@@ -101,6 +61,29 @@ export enum PlatformType {
   Linux = "linux",
 }
 
+export type FileChangeType = "Created" | "Modified" | "Deleted" | "Renamed";
+
+export interface FileChangeEvent {
+  id: string;
+  path: string;
+  change_type: FileChangeType;
+  old_path?: string;
+  timestamp: number;
+}
+
+export interface FileWatchConfig {
+  enabled: boolean;
+  watched_paths: string[];
+  ignore_patterns: string[];
+  debounce_delay: number;
+}
+
+export interface FileWatchStatus {
+  is_watching: boolean;
+  watched_count: number;
+  last_event_time?: number;
+}
+
 // 事件类型定义
 export type FileAddedEventDetail = FileInfo;
 
@@ -122,7 +105,6 @@ export const IPC_CHANNELS = {
   FS_EXISTS: "fs_exists",
   FS_MKDIR: "fs_mkdir",
   APP_GET_PATH: "app_get_path",
-  CHECK_FOR_UPDATES: "check_for_updates",
   BACKUP_CREATE: "backup_create",
   BACKUP_RESTORE: "backup_restore",
   BACKUP_CLEANUP: "backup_cleanup",
@@ -133,6 +115,13 @@ export const IPC_CHANNELS = {
   LOGGER_GET_LOGS: "logger_get_logs",
   LOGGER_WRITE_LOG: "logger_write_log",
   SET_PORTABLE_MODE: "set_portable_mode",
+  FILE_WATCH_START: "file_watch_start",
+  FILE_WATCH_STOP: "file_watch_stop",
+  FILE_WATCH_ADD_PATH: "file_watch_add_path",
+  FILE_WATCH_REMOVE_PATH: "file_watch_remove_path",
+  FILE_WATCH_GET_STATUS: "file_watch_get_status",
+  FILE_WATCH_UPDATE_CONFIG: "file_watch_update_config",
+  FILE_WATCH_GET_CONFIG: "file_watch_get_config",
 };
 
 // 获取当前窗口实例（在非Tauri环境中可能会失败）
@@ -151,12 +140,22 @@ try {
   };
 }
 
-// 平台信息
-let platformInfo: PlatformType = PlatformType.Win32;
-// TODO: 替换为Tauri的platform API，处理异步时序
-// platform().then((p) => {
-//   platformInfo = p as PlatformType;
-// });
+// 平台信息 - 使用 Promise 缓存
+let platformPromise: Promise<PlatformType> | null = null;
+
+const getPlatform = async (): Promise<PlatformType> => {
+  if (!platformPromise) {
+    platformPromise = (async () => {
+      try {
+        const { platform } = await import('@tauri-apps/plugin-os');
+        return (await platform()) as PlatformType;
+      } catch {
+        return PlatformType.Win32;
+      }
+    })();
+  }
+  return platformPromise;
+};
 
 export const tauriIPC = {
   invoke: async <T = unknown>(
@@ -204,9 +203,7 @@ export const tauriIPC = {
     },
   },
 
-  get platform() {
-    return platformInfo;
-  },
+  platform: getPlatform(),
   window: {
     minimize: async () => {
       try {
@@ -289,33 +286,6 @@ export const tauriIPC = {
       } catch (error) {
         handleError(error, "Window is visible");
       }
-    },
-  },
-  updater: {
-    checkUpdates: async () => {
-      try {
-        return await invoke(IPC_CHANNELS.CHECK_FOR_UPDATES);
-      } catch (error) {
-        handleError(error, "Check updates");
-      }
-    },
-    installUpdate: () => {
-      throw new Error("installUpdate 未实现");
-    },
-    onUpdateFound: (_callback: () => void) => {
-      throw new Error("onUpdateFound 未实现");
-    },
-    onUpdateNotFound: (_callback: () => void) => {
-      throw new Error("onUpdateNotFound 未实现");
-    },
-    onUpdateReady: (_callback: () => void) => {
-      throw new Error("onUpdateReady 未实现");
-    },
-    onUpdateError: (_callback: (error: string) => void) => {
-      throw new Error("onUpdateError 未实现");
-    },
-    off: (_channel: string) => {
-      throw new Error("off 未实现");
     },
   },
   dialog: {
@@ -583,6 +553,79 @@ export const tauriIPC = {
     } catch (error) {
       handleError(error, "Set window transparency");
     }
+  },
+  fileWatch: {
+    start: async () => {
+      try {
+        return await invoke(IPC_CHANNELS.FILE_WATCH_START);
+      } catch (error) {
+        handleError(error, "File watch start");
+      }
+    },
+    stop: async () => {
+      try {
+        return await invoke(IPC_CHANNELS.FILE_WATCH_STOP);
+      } catch (error) {
+        handleError(error, "File watch stop");
+      }
+    },
+    addPath: async (path: string) => {
+      try {
+        validateNonEmpty(path, "监控路径不能为空");
+        return await invoke(IPC_CHANNELS.FILE_WATCH_ADD_PATH, { path });
+      } catch (error) {
+        handleError(error, "File watch add path");
+      }
+    },
+    removePath: async (path: string) => {
+      try {
+        validateNonEmpty(path, "监控路径不能为空");
+        return await invoke(IPC_CHANNELS.FILE_WATCH_REMOVE_PATH, { path });
+      } catch (error) {
+        handleError(error, "File watch remove path");
+      }
+    },
+    getStatus: async (): Promise<FileWatchStatus | null> => {
+      try {
+        const result = await invoke<FileWatchStatus>(IPC_CHANNELS.FILE_WATCH_GET_STATUS);
+        return result;
+      } catch (error) {
+        handleError(error, "File watch get status");
+        return null;
+      }
+    },
+    updateConfig: async (config: FileWatchConfig) => {
+      try {
+        return await invoke(IPC_CHANNELS.FILE_WATCH_UPDATE_CONFIG, { config });
+      } catch (error) {
+        handleError(error, "File watch update config");
+      }
+    },
+    getConfig: async (): Promise<FileWatchConfig | null> => {
+      try {
+        const result = await invoke<FileWatchConfig>(IPC_CHANNELS.FILE_WATCH_GET_CONFIG);
+        return result;
+      } catch (error) {
+        handleError(error, "File watch get config");
+        return null;
+      }
+    },
+    onFileChange: (callback: (event: FileChangeEvent) => void) => {
+      try {
+        const unlisten = listen<FileChangeEvent>("file_watch_event", (event) => {
+          callback(event.payload);
+        });
+        return async () => {
+          try {
+            await unlisten;
+          } catch (error) {
+            handleError(error, "File watch onFileChange cleanup");
+          }
+        };
+      } catch (error) {
+        return async () => {};
+      }
+    },
   },
 };
 

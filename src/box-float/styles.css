@@ -103,15 +103,15 @@ body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--bg-primary);
-  /* Windows 11 毛玻璃/Mica 效果降级处理 */
+  /* 简化渲染，避免拉伸时黑边频闪 */
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   box-shadow: 0 0 0 1px var(--border-subtle), var(--shadow-lg);
-  transform: translateZ(0);
-  will-change: transform;
-  transition: box-shadow var(--transition) var(--ease-out), transform var(--transition) var(--ease-out);
-  /* 确保在所有缩放比例下正确渲染 */
-  contain: layout style paint;
+  /* 移除可能导致性能问题的设置 */
+  /* 减少重绘/重排 */
+  position: relative;
+  /* 确保背景正确覆盖 */
+  background-clip: border-box;
 }
 
 /* Windows 10/11 特定的毛玻璃效果兼容性 */
@@ -142,6 +142,14 @@ body {
   position: relative;
   overflow: hidden;
   transition: background var(--transition) var(--ease-out);
+  /* 彻底修复圆角白边问题 */
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  margin: -2px -2px 0 -2px;
+  padding: calc(var(--spacing-sm) + 2px) calc(var(--spacing-md) + 2px) var(--spacing-sm) calc(var(--spacing-md) + 2px);
+  /* 确保背景完全覆盖 */
+  background-clip: padding-box;
+  z-index: 1;
 }
 
 /* 拖拽状态样式 */
@@ -149,6 +157,23 @@ body {
   background: var(--bg-secondary);
   cursor: grabbing;
 }
+
+/* 额外的圆角覆盖层，彻底消除白边 */
+.bf-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--radius-lg);
+  background: inherit;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  pointer-events: none;
+  z-index: -1;
+}
+
+
 
 /* 左侧整块可拖拽，内部标题强制横向排布，避免窄窗下竖排文字 */
 .bf-header-main {
@@ -175,6 +200,16 @@ body {
 .bf-root--collapsed .bf-body {
   flex: 0 0 auto;
   grid-template-rows: 0fr;
+  height: 0;
+  overflow: hidden;
+}
+
+.bf-root--collapsed .bf-header {
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: none;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .bf-body-inner {

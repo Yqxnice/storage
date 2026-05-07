@@ -2,7 +2,6 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { LogicalSize } from '@tauri-apps/api/window'
 import { listen, emit } from '@tauri-apps/api/event'
-import { IoChevronDown, IoChevronUp } from 'react-icons/io5'
 import type { Item, Box } from '../store'
 import { tauriIPC } from '../utils/tauri-ipc'
 import {
@@ -12,11 +11,24 @@ import {
   persistBoxDisplayName,
   persistOrphanFloatTitle,
 } from '../utils/box-float-actions'
-import { BOXFLOAT_ORPHAN_MENU_BOX_ID, compactFloatWindowId, floatMenuLabelFromFloatWindowId } from '../utils/box-float-labels'
-import { openBoxFloatMenuWindow } from '../utils/box-float-menu-window'
+import { BOXFLOAT_ORPHAN_MENU_BOX_ID, compactFloatWindowId } from '../utils/box-float-labels'
+import { openBoxFloatMenuWindow, closeBoxFloatMenuWindow, tryCloseBoxFloatMenuWindow } from '../utils/box-float-menu-window'
 import { BOX_FLOAT_ITEMS_RELOAD } from '../utils/box-float-notify'
 import { logDebug, logInfo, logError } from '../utils/logger'
 import { formatFileSize } from '../utils/helpers'
+import { useSortable } from '../hooks'
+
+const IconChevronUp = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="18 15 12 9 6 15"></polyline>
+  </svg>
+)
+
+const IconChevronDown = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="6 9 12 15 18 9"></polyline>
+  </svg>
+)
 
 const MENU_ACTION = 'box-float-menu-action'
 const MENU_CLOSED = 'box-float-menu-did-close'
@@ -37,122 +49,23 @@ function readParams(): {
     boxId: q.get('boxId')?.trim() || null,
     floatWindowId: rawFloatWindowId ? compactFloatWindowId(rawFloatWindowId) : null,
     boxName: q.get('boxName')?.trim() || '',
-    isOrphan: q.get('orphan') === '1',
+    isOrphan: q.get('isOrphan') === 'true',
   }
 }
 
-async function loadItemsForBox(boxId: string): Promise<Item[]> {
-  const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
-  if (!raw || typeof raw !== 'object' || !('items' in raw)) {
-    return []
-  }
-  const items = (raw as { items: Item[] }).items
-  if (!Array.isArray(items)) {
-    return []
-  }
-  return items.filter((item) => item.boxId === boxId)
-}
-
-// 图标缓存 - 优化版
-const iconCache = new Map<string, string | null>()
-const pendingIconRequests = new Map<string, Promise<string | null>>()
-// 图标加载超时机制
-const ICON_LOAD_TIMEOUT = 5000
-
-const FileIcon: React.FC<{ item: Item }> = React.memo(({ item }) => {
-  const [icon, setIcon] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let isMounted = true
-    let timeoutId: number | null = null
-    
-    const loadIcon = async () => {
-      if (item.category !== 'desktop' || !item.path) {
-        if (isMounted) {
-          setLoading(false)
-        }
-        return
-      }
-
-      // 检查缓存
-      if (iconCache.has(item.path)) {
-        if (isMounted) {
-          setIcon(iconCache.get(item.path) ?? null)
-          setLoading(false)
-        }
-        return
-      }
-
-      // 检查是否已有请求在进行
-      if (pendingIconRequests.has(item.path)) {
-        const existingRequest = pendingIconRequests.get(item.path)!
-        const result = await existingRequest
-        if (isMounted) {
-          setIcon(result)
-          setLoading(false)
-        }
-        return
-      }
-
-      const requestPromise = (async () => {
-        try {
-          const iconData = await tauriIPC.getFileIcon(item.path, 32)
-          const result = iconData && iconData !== 'default-icon' ? iconData : null
-          iconCache.set(item.path, result)
-          return result
-        } catch (error) {
-          logError('获取文件图标失败:', error)
-          return null
-        }
-      })()
-
-      pendingIconRequests.set(item.path, requestPromise)
-
-      // 添加超时机制
-      const timeoutPromise = new Promise<string | null>((resolve) => {
-        timeoutId = window.setTimeout(() => {
-          logDebug('图标加载超时，使用默认图标')
-          resolve(null)
-        }, ICON_LOAD_TIMEOUT)
-      })
-
-      const result = await Promise.race([requestPromise, timeoutPromise])
-      pendingIconRequests.delete(item.path)
-
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-
-      if (isMounted) {
-        setIcon(result)
-        setLoading(false)
-      }
-    }
-
-    loadIcon()
-    return () => {
-      isMounted = false
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, [item.path, item.category])
-
-  const finalIcon = item.category === 'web' && item.icon ? item.icon : icon
-
-  if (finalIcon) {
+const FileIcon: React.FC<{ item: Item }> = ({ item }) => {
+  if (item.category === 'web' && item.icon) {
     return (
-      <div className="item-icon-container">
-        <img src={finalIcon} alt="" className="item-icon" />
+      <div className="item-ico" style={{ background: 'var(--accent-bg)' }}>
+        <img src={item.icon} alt="" style={{ width: 20, height: 20, objectFit: 'contain' }} />
       </div>
     )
   }
 
   if (item.category === 'web') {
     return (
-      <div className="item-icon-container">
-        <span className="default-icon">🔗</span>
+      <div className="item-ico" style={{ background: 'var(--accent-bg)' }}>
+        🔗
       </div>
     )
   }
@@ -160,39 +73,39 @@ const FileIcon: React.FC<{ item: Item }> = React.memo(({ item }) => {
   switch (item.type) {
     case 'folder':
       return (
-        <div className="item-icon-container">
-          <span className="default-icon">📁</span>
+        <div className="item-ico" style={{ background: 'var(--green-bg)' }}>
+          📁
         </div>
       )
     case 'icon':
       return (
-        <div className="item-icon-container">
-          <span className="default-icon">🔗</span>
+        <div className="item-ico" style={{ background: 'var(--accent-bg)' }}>
+          🔗
         </div>
       )
     default:
       return (
-        <div className="item-icon-container">
-          <span className="default-icon">{loading ? '…' : '📄'}</span>
+        <div className="item-ico" style={{ background: 'var(--amber-bg)' }}>
+          📄
         </div>
       )
   }
-})
-
-const IconList: React.FC<{ active?: boolean }> = ({ active }) => (
-  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className={active ? 'bf-icon-active' : ''}>
-    <path
-      fill="currentColor"
-      d="M2 3.5h12v1H2zm0 4h12v1H2zm0 4h8v1H2z"
-    />
-  </svg>
-)
+}
 
 const IconGrid: React.FC<{ active?: boolean }> = ({ active }) => (
   <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className={active ? 'bf-icon-active' : ''}>
     <path
       fill="currentColor"
       d="M2 2h5v5H2zm7 0h5v5H9zM2 9h5v5H2zm7 0h5v5H9z"
+    />
+  </svg>
+)
+
+const IconList: React.FC<{ active?: boolean }> = ({ active }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className={active ? 'bf-icon-active' : ''}>
+    <path
+      fill="currentColor"
+      d="M2 2h12v2H2zm0 4h12v2H2zm0 4h12v2H2zm0 4h12v2H2z"
     />
   </svg>
 )
@@ -205,28 +118,23 @@ const BoxFloatApp: React.FC = () => {
   const [titleName, setTitleName] = useState(
     init.isOrphan ? init.boxName || 'Welcome' : init.boxName || '收纳盒',
   )
+  const [boxColor, setBoxColor] = useState<string | undefined>(undefined)
   const [items, setItems] = useState<Item[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
-   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
   const [menuOpen, setMenuOpen] = useState(false)
   const [contentExpanded, setContentExpanded] = useState(true)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
-  const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const moreBtnRef = useRef<HTMLButtonElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const editingTitleRef = useRef(false)
   const headerRef = useRef<HTMLElement>(null)
   const lastExpandedLogicalH = useRef(440)
   const lastContentExpanded = useRef<boolean | null>(null)
-   const [editingTitle, setEditingTitle] = useState(false)
-   const [draftTitle, setDraftTitle] = useState('')
-   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-   const [pendingDeleteBoxId, setPendingDeleteBoxId] = useState<string | null>(null)
-  const draggedItemId = useRef<string | null>(null)
-  const isDraggingOut = useRef(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pendingDeleteBoxId, setPendingDeleteBoxId] = useState<string | null>(null)
 
-  // 全局阻止原生右键菜单
   useEffect(() => {
     const preventDefaultContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -243,9 +151,12 @@ const BoxFloatApp: React.FC = () => {
 
   useEffect(() => {
     const name = titleName || '收纳盒'
-    void getCurrentWebviewWindow().setTitle(name).catch((error) => {
+    try {
+      const window = getCurrentWebviewWindow()
+      window.setTitle(name)
+    } catch (error) {
       logError('设置窗口标题失败:', error)
-    })
+    }
   }, [titleName])
 
   const reloadTitleFromStorage = useCallback(async () => {
@@ -261,6 +172,7 @@ const BoxFloatApp: React.FC = () => {
     const boxes = (raw as { boxes: Box[] }).boxes
     const b = Array.isArray(boxes) ? boxes.find((x) => x.id === boxId) : undefined
     if (b?.name) setTitleName(b.name)
+    if (b?.color !== undefined) setBoxColor(b.color)
   }, [boxId, floatWindowId, isOrphan])
 
   useEffect(() => {
@@ -284,8 +196,10 @@ const BoxFloatApp: React.FC = () => {
     let cancelled = false;
 
     const setupListener = async () => {
-      const unlisten = await listen('box-float-storage-updated', () => {
+      const unlisten = await listen('box-float-storage-updated', (event) => {
         if (cancelled || editingTitleRef.current) return;
+        const payload = event.payload as { boxId?: string };
+        if (payload.boxId && payload.boxId !== boxId) return;
         void reloadTitleFromStorage();
       });
       
@@ -306,7 +220,7 @@ const BoxFloatApp: React.FC = () => {
         unlistenFn.then(fn => fn()).catch(logError);
       }
     };
-  }, [reloadTitleFromStorage])
+  }, [boxId, isOrphan, reloadTitleFromStorage])
 
   useEffect(() => {
     if (!editingTitle) return
@@ -319,6 +233,13 @@ const BoxFloatApp: React.FC = () => {
     })
     return () => window.cancelAnimationFrame(id)
   }, [editingTitle])
+
+  const loadItemsForBox = async (boxId: string): Promise<Item[]> => {
+    const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
+    if (!raw || typeof raw !== 'object') return []
+    const items = (raw as { items: Item[] }).items || []
+    return items.filter((item) => item.boxId === boxId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  }
 
   const refreshItems = useCallback(async (id: string) => {
     setLoadError(null)
@@ -333,108 +254,23 @@ const BoxFloatApp: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (!boxId || isOrphan) return
-    void refreshItems(boxId)
+    if (isOrphan) return
+    if (!boxId) return
+    refreshItems(boxId)
   }, [boxId, isOrphan, refreshItems])
 
   useEffect(() => {
-    if (!boxId || isOrphan) return;
-    
     let unlistenFn: (() => void) | Promise<(() => void)> | null = null;
     let cancelled = false;
 
     const setupListener = async () => {
-      const unlisten = await listen<{ boxId: string }>(BOX_FLOAT_ITEMS_RELOAD, (e) => {
+      const unlisten = await listen(BOX_FLOAT_ITEMS_RELOAD, (event) => {
         if (cancelled) return;
-        if (e.payload?.boxId === boxId) {
-          void refreshItems(boxId);
-        }
+        const payload = event.payload as { boxId?: string };
+        if (!payload.boxId || payload.boxId !== boxId) return;
+        void refreshItems(payload.boxId);
       });
-      
-      if (cancelled) {
-        unlisten();
-        return;
-      } else {
-        unlistenFn = unlisten;
-      }
-    };
 
-    setupListener();
-
-    return () => {
-      cancelled = true;
-      if (typeof unlistenFn === 'function') {
-        unlistenFn();
-      } else if (unlistenFn instanceof Promise) {
-        unlistenFn.then(fn => fn()).catch(logError);
-      }
-    };
-  }, [boxId, isOrphan, refreshItems])
-
-  useEffect(() => {
-    if (!boxId || isOrphan) return
-    const onFocus = () => {
-      void refreshItems(boxId)
-    }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [boxId, isOrphan, refreshItems])
-
-  useEffect(() => {
-    if (!boxId || isOrphan) return;
-    
-    let unlistenFn: (() => void) | Promise<(() => void)> | null = null;
-    let cancelled = false;
-
-    const setupListener = async () => {
-      const unlisten = await listen<{ paths: string[] }>('tauri://drag-drop', (e) => {
-        if (cancelled) return;
-        logDebug('拖放事件触发');
-        const paths = (e.payload as { paths?: string[] })?.paths;
-        if (paths && paths.length > 0) {
-          logInfo('检测到拖入文件，立即添加到收纳盒');
-          
-          // 检测现有项目，避免重复添加
-          const existingPaths = new Set(items.map((item) => item.path));
-          const newPaths = paths.filter((path) => !existingPaths.has(path));
-          
-          if (newPaths.length === 0) {
-            logInfo('所有文件已存在，跳过添加');
-            // 还是要同步到后台，确保其他窗口也有
-            void tauriIPC.dragFiles(paths, boxId);
-            return;
-          }
-          
-          // 只添加新文件
-          const newItems: Item[] = newPaths.map((path) => {
-            // 从路径中提取文件名
-            const pathParts = path.split(/[/\\]/);
-            const fileName = pathParts.filter(Boolean).pop() || path;
-            
-            // 从文件名猜测类型（简单判断）
-            const isFolder = !fileName.includes('.') && fileName.length > 0;
-            const itemType = isFolder ? 'folder' : 'file';
-            
-            return {
-              id: 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-              name: fileName,
-              category: 'desktop',
-              type: itemType,
-              path: path,
-              boxId: boxId,
-              addedAt: Date.now(),
-              clickCount: 0
-            };
-          });
-          
-          // 立即添加到状态
-          setItems((prev) => [...prev, ...newItems]);
-          
-          // 异步同步到存储（还是发送所有路径，确保一致性）
-          void tauriIPC.dragFiles(paths, boxId);
-        }
-      });
-      
       if (cancelled) {
         unlisten();
         return;
@@ -452,7 +288,7 @@ const BoxFloatApp: React.FC = () => {
         unlistenFn.then(fn => fn()).catch(logError);
       }
     };
-  }, [boxId, isOrphan, items])
+  }, [boxId, isOrphan, refreshItems])
 
   useEffect(() => {
     if (!isOrphan || !floatWindowId) return;
@@ -499,41 +335,6 @@ const BoxFloatApp: React.FC = () => {
     };
   }, [isOrphan, floatWindowId])
 
-  useEffect(() => {
-    if (isOrphan || !boxId) return;
-    
-    let unlistenFn: (() => void) | Promise<(() => void)> | null = null;
-    let cancelled = false;
-
-    const setupListener = async () => {
-      const unlisten = await listen('tauri://drag-leave', () => {
-        if (cancelled) return;
-        if (draggedItemId.current) {
-          logDebug('检测到项目拖出窗口');
-          isDraggingOut.current = true;
-        }
-      });
-      
-      if (cancelled) {
-        unlisten();
-        return;
-      }
-      unlistenFn = unlisten;
-    };
-
-    setupListener();
-
-    return () => {
-      cancelled = true;
-      if (typeof unlistenFn === 'function') {
-        unlistenFn();
-      } else if (unlistenFn instanceof Promise) {
-        unlistenFn.then(fn => fn()).catch(logError);
-      }
-    };
-  }, [boxId, isOrphan])
-
-  /** 独立菜单小窗 → 主窗 */
   useEffect(() => {
     let unA: (() => void) | Promise<(() => void)> | null = null
     let unC: (() => void) | Promise<(() => void)> | null = null
@@ -582,6 +383,32 @@ const BoxFloatApp: React.FC = () => {
     }
   }, [boxId, floatWindowId, isOrphan])
 
+  useEffect(() => {
+    if (!menuOpen || !floatWindowId) return
+    
+    const handleClickOutside = async (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const moreButton = moreBtnRef.current
+      
+      if (moreButton && (target === moreButton || moreButton.contains(target))) {
+        return
+      }
+      
+      try {
+        await closeBoxFloatMenuWindow(floatWindowId)
+        setMenuOpen(false)
+      } catch (err) {
+        logDebug('点击关闭菜单时出错:', err)
+      }
+    }
+    
+    document.addEventListener('click', handleClickOutside)
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [menuOpen, floatWindowId])
+
   useLayoutEffect(() => {
     if (lastContentExpanded.current === null) {
       lastContentExpanded.current = contentExpanded
@@ -601,7 +428,6 @@ const BoxFloatApp: React.FC = () => {
         const h = contentExpanded ? Math.max(lastExpandedLogicalH.current, headerH + 160) : headerH
         await win.setSize(new LogicalSize(logicalW, h))
       } catch {
-        // ACL 或未在 Tauri 内运行
       }
     }, 280)
     return () => window.clearTimeout(id)
@@ -610,43 +436,36 @@ const BoxFloatApp: React.FC = () => {
   useEffect(() => {
     if (contentExpanded || !floatWindowId) return
     void (async () => {
-      try {
-        const label = floatMenuLabelFromFloatWindowId(floatWindowId)
-        const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
-        const existingMenu = await WebviewWindow.getByLabel(label)
-        if (existingMenu) {
-          await existingMenu.close()
-          setMenuOpen(false)
-        }
-      } catch {
-        // 忽略错误
-      }
+      await closeBoxFloatMenuWindow(floatWindowId)
+      setMenuOpen(false)
     })()
   }, [contentExpanded, floatWindowId])
+
+  const toggleContentExpanded = () => {
+    if (!contentExpanded) {
+      const win = getCurrentWebviewWindow()
+      void (async () => {
+        const inner = await win.innerSize()
+        const sf = await win.scaleFactor()
+        lastExpandedLogicalH.current = Math.max(Math.round(inner.height / sf), 440)
+      })()
+    }
+    setContentExpanded(!contentExpanded)
+  }
 
   const toggleMoreMenu = async () => {
     if (!floatWindowId || !moreBtnRef.current) return
     const menuBoxId = isOrphan ? BOXFLOAT_ORPHAN_MENU_BOX_ID : boxId
     if (!menuBoxId) return
     
-    // 如果菜单已经是打开状态，关闭它
     if (menuOpen) {
-      try {
-        const label = floatMenuLabelFromFloatWindowId(floatWindowId)
-        const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
-        const existingMenu = await WebviewWindow.getByLabel(label)
-        if (existingMenu) {
-          await existingMenu.close()
-        }
-        setMenuOpen(false)
-      } catch {
-        // 忽略关闭错误
+      const wasClosed = await tryCloseBoxFloatMenuWindow(floatWindowId)
+      if (wasClosed) {
         setMenuOpen(false)
       }
       return
     }
     
-    // 菜单未打开，打开它
     try {
       await openBoxFloatMenuWindow({
         floatWindowId,
@@ -654,35 +473,9 @@ const BoxFloatApp: React.FC = () => {
         anchorEl: moreBtnRef.current,
       })
       setMenuOpen(true)
-    } catch (e) {
-      logError('打开菜单窗失败:', e)
-      setMenuOpen(false)
+    } catch (err) {
+      logError('打开菜单失败:', err)
     }
-  }
-
-  const toggleContentExpanded = () => {
-    void (async () => {
-      if (contentExpanded) {
-        try {
-            const win = getCurrentWebviewWindow()
-            const inner = await win.innerSize()
-            const sf = await win.scaleFactor()
-            lastExpandedLogicalH.current = Math.max(Math.round(inner.height / sf), 120)
-          } catch (error) {
-            logError('获取窗口尺寸失败:', error)
-          }
-      }
-      setContentExpanded((v) => !v)
-    })()
-  }
-
-  const removeFileExtension = (name: string, type?: string) => {
-    if (type === 'folder') return name
-    const lastDotIndex = name.lastIndexOf('.')
-    if (lastDotIndex > 0) {
-      return name.substring(0, lastDotIndex)
-    }
-    return name
   }
 
   const handleItemClick = (item: Item) => {
@@ -694,105 +487,13 @@ const BoxFloatApp: React.FC = () => {
     }
   }
 
-  const deleteItemFromStorage = useCallback(async (itemId: string) => {
-    logDebug('[拖拽删除] 开始执行删除操作，项目ID:', itemId)
-    if (!boxId) {
-      logDebug('[拖拽删除] boxId为空，取消删除')
-      return
+  const removeFileExtension = (name: string, type?: string) => {
+    if (type === 'folder') return name
+    const lastDotIndex = name.lastIndexOf('.')
+    if (lastDotIndex > 0) {
+      return name.substring(0, lastDotIndex)
     }
-    try {
-      logDebug('[拖拽删除] 从存储加载数据...')
-      const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
-      if (!raw || typeof raw !== 'object') {
-        logDebug('[拖拽删除] 存储数据无效')
-        return
-      }
-      
-      const storage = raw as { items: Item[] }
-      logDebug('[拖拽删除] 当前项目总数:', storage.items.length)
-      const itemToDelete = storage.items.find(item => item.id === itemId)
-      logDebug('[拖拽删除] 准备删除的项目:', itemToDelete)
-      
-      const newItems = storage.items.filter(item => item.id !== itemId)
-      logDebug('[拖拽删除] 删除后剩余项目数:', newItems.length)
-      
-      await tauriIPC.store.set({
-        key: 'storage',
-        value: { ...storage, items: newItems },
-        storeType: 'storage'
-      })
-      logDebug('[拖拽删除] 存储更新成功')
-      
-      await emit('box-float-storage-updated', {})
-      await emit(BOX_FLOAT_ITEMS_RELOAD, { boxId })
-      setItems(newItems.filter(item => item.boxId === boxId))
-      logDebug('[拖拽删除] 界面更新成功')
-    } catch (err) {
-      logError('[拖拽删除] 异常错误:', err)
-    }
-  }, [boxId])
-
-  const handleDragStart = (item: Item, e: React.MouseEvent) => {
-    logDebug('[拖拽事件] onMouseDown - 鼠标按下')
-    logDebug('[拖拽事件] 鼠标按键:', e.button, '位置:', { x: e.clientX, y: e.clientY })
-    logDebug('[拖拽事件] 被拖拽项目:', {
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      path: item.path,
-      boxId: item.boxId
-    })
-    draggedItemId.current = item.id
-    isDraggingOut.current = false
-    setIsDragging(true)
-    setDraggingItemId(item.id)
-    logDebug('[拖拽事件] 拖拽状态已初始化 - draggedItemId:', draggedItemId.current, 'isDraggingOut:', isDraggingOut.current)
-  }
-
-  const handleDragEnd = (e: React.MouseEvent) => {
-    logDebug('[拖拽事件] onMouseUp - 鼠标释放')
-    logDebug('[拖拽事件] 释放时状态 - draggedItemId:', draggedItemId.current, 'isDraggingOut:', isDraggingOut.current)
-    logDebug('[拖拽事件] 释放时鼠标位置:', { x: e.clientX, y: e.clientY })
-    
-    if (isDraggingOut.current && draggedItemId.current) {
-      logDebug('[拖拽事件] ✅ 符合删除条件 - 项目已拖出窗口，准备删除')
-      void deleteItemFromStorage(draggedItemId.current)
-    } else {
-      logDebug('[拖拽事件] ❌ 不符合删除条件 -',
-        !draggedItemId.current ? '没有被拖拽的项目' : '项目未拖出窗口')
-    }
-    
-    logDebug('[拖拽事件] 清理拖拽状态')
-    draggedItemId.current = null
-    isDraggingOut.current = false
-    setIsDragging(false)
-    setDraggingItemId(null)
-  }
-
-  const handleDragLeave = (item: Item) => {
-    logDebug('[拖拽事件] onMouseLeave - 鼠标离开项目元素')
-    logDebug('[拖拽事件] 当前拖拽状态 - draggedItemId:', draggedItemId.current, '离开项目ID:', item.id)
-    
-    if (draggedItemId.current === item.id) {
-      logDebug('[拖拽事件] 标记项目为拖出状态')
-      isDraggingOut.current = true
-    } else {
-      logDebug('[拖拽事件] 离开的不是当前拖拽项目，忽略')
-    }
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(true)
-  }
-
-  const handleDragLeaveMain = () => {
-    setDragOver(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
+    return name
   }
 
   const displayTitle = titleName.trim() || (isOrphan ? 'Welcome' : '未命名')
@@ -856,14 +557,53 @@ const BoxFloatApp: React.FC = () => {
     setPendingDeleteBoxId(null)
   }
 
+  const handleReorder = useCallback(async (fromIndex: number, toIndex: number) => {
+    logInfo('悬浮窗排序:', { fromIndex, toIndex })
+    
+    if (!boxId) return
+    
+    const newItems = [...items]
+    const [movedItem] = newItems.splice(fromIndex, 1)
+    newItems.splice(toIndex, 0, movedItem)
+    
+    newItems.forEach((item, index) => {
+      if (item.order !== index) {
+        item.order = index
+      }
+    })
+    
+    setItems(newItems)
+    
+    try {
+      const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
+      if (raw && typeof raw === 'object') {
+        const storage = { ...raw } as { items: Item[] }
+        const otherItems = storage.items?.filter(item => item.boxId !== boxId) || []
+        storage.items = [...newItems, ...otherItems]
+        await tauriIPC.store.set({ key: 'storage', value: storage, storeType: 'storage' })
+        
+        await emit(BOX_FLOAT_ITEMS_RELOAD, { boxId })
+      }
+    } catch (err) {
+      logError('保存排序失败:', err)
+    }
+  }, [items, boxId])
+
+  const { containerRef } = useSortable({
+    onReorder: handleReorder,
+    enabled: !isOrphan && !!boxId && items.length > 0,
+    draggable: '.item-row, .item-cell',
+    filter: '',
+  })
+
   return (
     <div className={`bf-root ${contentExpanded ? 'bf-root--expanded' : 'bf-root--collapsed'}`}>
       <header 
         className="bf-header" 
         ref={headerRef} 
         data-tauri-drag-region 
-        data-dragging={isDragging}
         onDoubleClick={(e) => e.preventDefault()}
+        style={boxColor ? { backgroundColor: boxColor } : undefined}
       >
         <div className="bf-header-main">
           <div className="bf-title-row">
@@ -924,7 +664,10 @@ const BoxFloatApp: React.FC = () => {
             className="bf-tool"
             aria-label="更多"
             aria-expanded={menuOpen}
-            onClick={() => void toggleMoreMenu()}
+            onClick={(e) => {
+              e.stopPropagation()
+              void toggleMoreMenu()
+            }}
           >
             ⋯
           </button>
@@ -935,11 +678,11 @@ const BoxFloatApp: React.FC = () => {
             aria-expanded={contentExpanded}
             onClick={toggleContentExpanded}
           >
-            {contentExpanded ? <IoChevronUp size={18} /> : <IoChevronDown size={18} />}
+            {contentExpanded ? <IconChevronUp /> : <IconChevronDown />}
           </button>
         </div>
         <div className={`bf-delete-confirm ${showDeleteConfirm ? 'bf-delete-confirm--visible' : ''}`}>
-          <span className="bf-delete-confirm-text">确定关闭此悬浮窗？收纳盒与其中文件不会被删除。</span>
+          <span className="bf-delete-confirm-text">确定关闭悬浮窗？收纳盒与文件不会删除。</span>
           <div className="bf-delete-confirm-actions">
             <button
               type="button"
@@ -961,16 +704,16 @@ const BoxFloatApp: React.FC = () => {
 
       <div className="bf-body">
         <div className="bf-body-inner">
-          <main className="bf-main" data-drag-over={dragOver} onDragOver={handleDragOver} onDragLeave={handleDragLeaveMain} onDrop={handleDrop}>
+          <main className="bf-main">
             {isOrphan && (
               <div className="bf-empty bf-hints">
-                <p>空白悬浮窗 · 拖入桌面文件或快捷方式到此处</p>
-                <p>将自动创建收纳盒并与此窗绑定</p>
+                <p>空白悬浮窗 · 拖入文件或快捷方式</p>
+                <p>将自动创建收纳盒并绑定</p>
               </div>
             )}
             {!isOrphan && !boxId && (
               <div className="bf-empty">
-                <p>缺少收纳盒参数，请从主窗口打开悬浮窗。</p>
+                <p>缺少收纳盒参数，请从主窗口打开</p>
               </div>
             )}
             {!isOrphan && boxId && loadError && (
@@ -980,55 +723,26 @@ const BoxFloatApp: React.FC = () => {
             )}
             {!isOrphan && boxId && !loadError && items.length === 0 && (
               <div className="bf-empty bf-hints">
-                <p>拖动来放置文件或移出文件</p>
+                <p>拖放文件到此处添加或移出</p>
                 <p>
-                  按住 <kbd className="bf-kbd">Ctrl</kbd> 来复制文件
+                  <kbd className="bf-kbd">Ctrl</kbd> + 拖放 复制文件
                 </p>
                 <p>
-                  按下 <kbd className="bf-kbd">L</kbd> 来设置编组
+                  <kbd className="bf-kbd">L</kbd> 设置编组
                 </p>
                 <p>
-                  编组后可按住 <kbd className="bf-kbd">Ctrl</kbd> 临时解除编组
+                  编组后按 <kbd className="bf-kbd">Ctrl</kbd> 临时解除
                 </p>
               </div>
             )}
             {!isOrphan && boxId && !loadError && items.length > 0 && viewMode === 'list' && (
-              <div className="items-list">
+              <div ref={containerRef} className="items-list">
                 {items.map((item) => (
                   <div 
-                key={item.id} 
-                className="item-row" 
-                draggable
-                data-dragging-item={draggingItemId === item.id}
-                onClick={() => {
-                  logDebug('[拖拽事件] onClick - 点击项目:', item.name)
-                  handleItemClick(item)
-                }}
-                onMouseDown={(e) => {
-                  if (e.button === 0) {
-                    handleDragStart(item, e)
-                  }
-                }}
-                onMouseUp={(e) => {
-                  handleDragEnd(e)
-                }}
-                onMouseLeave={() => {
-                  handleDragLeave(item)
-                }}
-                onDragStart={(e) => {
-                  logDebug('[拖拽事件] onDragStart - 原生拖拽开始')
-                  logDebug('[拖拽事件] 原生拖拽事件:', {
-                    dataTransferTypes: e.dataTransfer.types,
-                    effectAllowed: e.dataTransfer.effectAllowed
-                  })
-                }}
-                onDragEnd={(e) => {
-                  logDebug('[拖拽事件] onDragEnd - 原生拖拽结束')
-                  logDebug('[拖拽事件] 原生拖拽结束事件:', {
-                    dropEffect: e.dataTransfer.dropEffect
-                  })
-                }}
-              >
+                    key={item.id} 
+                    className="item-row"
+                    onClick={() => handleItemClick(item)}
+                  >
                     <div className="item-row-left">
                       <FileIcon item={item} />
                       <span className="item-name">{removeFileExtension(item.name, item.type)}</span>
@@ -1039,42 +753,13 @@ const BoxFloatApp: React.FC = () => {
               </div>
             )}
             {!isOrphan && boxId && !loadError && items.length > 0 && viewMode === 'grid' && (
-              <div className="items-grid">
+              <div ref={containerRef} className="items-grid">
                 {items.map((item) => (
                   <div 
-                  key={item.id} 
-                  className="item-cell" 
-                  draggable
-                  data-dragging-item={draggingItemId === item.id}
-                  onClick={() => {
-                    logDebug('[拖拽事件] onClick - 点击项目:', item.name)
-                    handleItemClick(item)
-                  }}
-                  onMouseDown={(e) => {
-                    if (e.button === 0) {
-                      handleDragStart(item, e)
-                    }
-                  }}
-                  onMouseUp={(e) => {
-                    handleDragEnd(e)
-                  }}
-                  onMouseLeave={() => {
-                    handleDragLeave(item)
-                  }}
-                  onDragStart={(e) => {
-                    logDebug('[拖拽事件] onDragStart - 原生拖拽开始')
-                    logDebug('[拖拽事件] 原生拖拽事件:', {
-                      dataTransferTypes: e.dataTransfer.types,
-                      effectAllowed: e.dataTransfer.effectAllowed
-                    })
-                  }}
-                  onDragEnd={(e) => {
-                    logDebug('[拖拽事件] onDragEnd - 原生拖拽结束')
-                    logDebug('[拖拽事件] 原生拖拽结束事件:', {
-                      dropEffect: e.dataTransfer.dropEffect
-                    })
-                  }}
-                >
+                    key={item.id} 
+                    className="item-cell"
+                    onClick={() => handleItemClick(item)}
+                  >
                     <FileIcon item={item} />
                     <span className="item-cell-name">{removeFileExtension(item.name, item.type)}</span>
                   </div>

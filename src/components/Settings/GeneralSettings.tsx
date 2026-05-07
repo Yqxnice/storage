@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
-import { CustomModal, showMessage, CustomRadio, RadioGroup } from '../common';
+import { CustomModal, showMessage,RadioGroup } from '../common';
 import CustomSelect from '../common/CustomSelect';
 import { tauriIPC } from '../../utils/tauri-ipc';
-import { getThemeColors } from '../../utils/theme';
+import { STORAGE_TYPES } from '../../constants';
+import StoragePathModal from './StoragePathModal';
 
 interface BackupSelectModalProps {
   visible: boolean;
@@ -51,6 +52,52 @@ const GeneralSettings: React.FC = () => {
   const [backupsList, setBackupsList] = useState<string[]>([]);
   const [selectedBackup, setSelectedBackup] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
+  const [showStoragePathModal, setShowStoragePathModal] = useState(false);
+  const [currentDataPath, setCurrentDataPath] = useState('');
+  const [isLoadingPath, setIsLoadingPath] = useState(true);
+  const [isPortable, setIsPortable] = useState(false);
+
+  useEffect(() => {
+    const loadCurrentPath = async () => {
+      try {
+        const portable = await tauriIPC.invoke<boolean>('is_portable_mode', {}).catch(() => false);
+        setIsPortable(portable);
+        
+        if (portable) {
+          const path = await tauriIPC.store.get({ key: 'dataPath', storeType: STORAGE_TYPES.SETTINGS }) as string | null;
+          if (path) {
+            if (path === 'appdata') {
+              const appdataPath = await tauriIPC.app.getPath('appData') as string;
+              setCurrentDataPath(`${appdataPath}\\storage`);
+            } else if (path === 'current') {
+              const exePath = await tauriIPC.app.getPath('exe') as string;
+              const dirPath = exePath.substring(0, exePath.lastIndexOf('\\'));
+              setCurrentDataPath(`${dirPath}\\storage`);
+            } else {
+              setCurrentDataPath(path);
+            }
+          } else {
+            const exePath = await tauriIPC.app.getPath('exe') as string;
+            const dirPath = exePath.substring(0, exePath.lastIndexOf('\\'));
+            setCurrentDataPath(`${dirPath}\\storage`);
+          }
+        }
+      } catch (error) {
+        console.error('获取当前存储路径失败:', error);
+        try {
+          const exePath = await tauriIPC.app.getPath('exe') as string;
+          const dirPath = exePath.substring(0, exePath.lastIndexOf('\\'));
+          setCurrentDataPath(`${dirPath}\\storage`);
+        } catch {
+          setCurrentDataPath('无法获取路径');
+        }
+      } finally {
+        setIsLoadingPath(false);
+      }
+    };
+    loadCurrentPath();
+  }, []);
+
   const {
     sortByClickCount,
     setSortByClickCount,
@@ -76,7 +123,6 @@ const GeneralSettings: React.FC = () => {
     clearLogs,
     clearAllData,
     resetSettings,
-    theme,
     activeBoxId,
     setActiveBox,
     addItem,
@@ -84,7 +130,54 @@ const GeneralSettings: React.FC = () => {
     boxes,
     items,
   } = useStore();
-  
+
+  const handleChangeStoragePath = async (newPath: string, migrateData: boolean) => {
+    try {
+      const oldPath = await tauriIPC.store.get({ key: 'dataPath', storeType: STORAGE_TYPES.SETTINGS }) as string | null;
+
+      let oldFullPath = '';
+      if (oldPath === 'appdata') {
+        const appdataPath = await tauriIPC.app.getPath('appData') as string;
+        oldFullPath = `${appdataPath}\\storage`;
+      } else if (oldPath === 'current') {
+        const exePath = await tauriIPC.app.getPath('exe') as string;
+        const dirPath = exePath.substring(0, exePath.lastIndexOf('\\'));
+        oldFullPath = `${dirPath}\\storage`;
+      } else {
+        oldFullPath = oldPath || '';
+      }
+
+      if (migrateData) {
+        const oldDataExists = await tauriIPC.invoke<boolean>('fs_exists', { path: oldFullPath });
+        if (oldDataExists) {
+          await tauriIPC.invoke('fs_copy_dir', { from: oldFullPath, to: newPath });
+          await tauriIPC.invoke('fs_remove_dir', { path: oldFullPath });
+        }
+        await tauriIPC.store.set({ key: 'dataPath', value: newPath, storeType: STORAGE_TYPES.SETTINGS });
+      } else {
+        await tauriIPC.invoke('fs_mkdir', { path: newPath, options: { recursive: true } });
+
+        await tauriIPC.store.clear(STORAGE_TYPES.STORAGE);
+
+        await tauriIPC.store.set({ key: 'hasInitialized', value: true, storeType: STORAGE_TYPES.SETTINGS });
+        await tauriIPC.store.set({ key: 'hasShownWelcome', value: true, storeType: STORAGE_TYPES.SETTINGS });
+        await tauriIPC.store.set({ key: 'dataPath', value: newPath, storeType: STORAGE_TYPES.SETTINGS });
+
+        if (oldFullPath) {
+          const oldDataExists = await tauriIPC.invoke<boolean>('fs_exists', { path: oldFullPath });
+          if (oldDataExists) {
+            await tauriIPC.invoke('fs_remove_dir', { path: oldFullPath });
+          }
+        }
+      }
+
+      await tauriIPC.invoke('app_restart');
+    } catch (error) {
+      console.error('更改存储路径失败:', error);
+      showMessage.error('更改存储路径失败，请重试');
+    }
+  };
+
   const handleSettingToggle = (
     _setting: string,
     currentValue: boolean,
@@ -96,8 +189,8 @@ const GeneralSettings: React.FC = () => {
 
   const handleClearStorageData = async () => {
     const confirmed = await tauriIPC.dialog.confirm(
-      '确定要清除所有收纳盒数据吗？此操作将保留设置，不会关闭应用。',
-      '确认清除收纳盒数据'
+      '确定清除所有收纳盒数据？设置将保留。',
+      '清除收纳盒数据'
     );
     if (confirmed) {
       clearAllData('storage');
@@ -107,8 +200,8 @@ const GeneralSettings: React.FC = () => {
 
   const handleClearAllData = async () => {
     const confirmed = await tauriIPC.dialog.confirm(
-      '确定要清除全部数据（包括设置）吗？此操作将重置所有设置，应用将重新启动。',
-      '确认清除全部数据'
+      '确定清除全部数据？包括设置，应用将重启。',
+      '清除全部数据'
     );
     if (confirmed) {
       clearAllData('all');
@@ -118,8 +211,8 @@ const GeneralSettings: React.FC = () => {
 
   const handleResetSettings = async () => {
     const confirmed = await tauriIPC.dialog.confirm(
-      '确定要重置所有设置吗？这将恢复到默认配置。',
-      '确认重置设置'
+      '确定重置所有设置？将恢复默认配置。',
+      '重置设置'
     );
     if (confirmed) {
       await resetSettings();
@@ -139,7 +232,6 @@ const GeneralSettings: React.FC = () => {
         showMessage.warning('没有找到备份文件');
       }
     } catch (error) {
-
       showMessage.error('获取备份列表失败');
     }
   };
@@ -174,14 +266,11 @@ const GeneralSettings: React.FC = () => {
   const handleManualScan = async () => {
     let currentBoxId = activeBoxId;
     
-    // 如果没有收纳盒，自动创建一个"桌面收纳盒"
     if (!currentBoxId && boxes.length === 0) {
-      console.log('没有收纳盒，自动创建桌面收纳盒');
       const newBoxId = addBox('桌面收纳盒');
       currentBoxId = newBoxId;
       setActiveBox(newBoxId);
     } else if (!currentBoxId) {
-      // 如果有收纳盒但没有选中，选中第一个
       currentBoxId = boxes[0]?.id;
     }
     
@@ -192,10 +281,8 @@ const GeneralSettings: React.FC = () => {
 
     try {
       setIsScanning(true);
-      console.log('开始手动扫描桌面...');
       
       const desktopFiles = await tauriIPC.scanDesktopFiles(scanHiddenFiles);
-      console.log('扫描结果:', desktopFiles);
       
       if (desktopFiles && Array.isArray(desktopFiles) && desktopFiles.length > 0) {
         let addedCount = 0;
@@ -208,7 +295,6 @@ const GeneralSettings: React.FC = () => {
           
           if (fileExists) {
             skippedCount++;
-            console.log(`跳过文件 ${file.name}: 已存在于收纳盒中`);
             continue;
           }
           
@@ -243,10 +329,8 @@ const GeneralSettings: React.FC = () => {
       <div className="page-card">
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">开机自启动</div>
-            <div className="page-row-desc">
-              系统启动时自动运行桌面收纳
-            </div>
+            <div className="page-row-name">开机自启</div>
+            <div className="page-row-desc">系统启动时自动运行</div>
           </div>
           <div
             className={`page-toggle ${startOnBoot ? "on" : ""}`}
@@ -264,8 +348,8 @@ const GeneralSettings: React.FC = () => {
 
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">启动时最小化到托盘</div>
-            <div className="page-row-desc">启动后不显示主窗口</div>
+            <div className="page-row-name">启动时最小化</div>
+            <div className="page-row-desc">启动后隐藏主窗口</div>
           </div>
           <div
             className={`page-toggle ${startMinimized ? "on" : ""}`}
@@ -283,10 +367,8 @@ const GeneralSettings: React.FC = () => {
 
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">关闭时最小化到托盘</div>
-            <div className="page-row-desc">
-              点击关闭按钮时保持后台运行
-            </div>
+            <div className="page-row-name">关闭时最小化</div>
+            <div className="page-row-desc">点击关闭保持后台运行</div>
           </div>
           <div
             className={`page-toggle ${minimizeOnClose ? "on" : ""}`}
@@ -306,10 +388,8 @@ const GeneralSettings: React.FC = () => {
       <div className="page-card">
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">自动扫描桌面变更</div>
-            <div className="page-row-desc">
-              检测到新的桌面项目时提示收纳
-            </div>
+            <div className="page-row-name">自动扫描桌面</div>
+            <div className="page-row-desc">检测新文件并提示收纳</div>
           </div>
           <div
             className={`page-toggle ${autoScanDesktop ? "on" : ""}`}
@@ -328,9 +408,7 @@ const GeneralSettings: React.FC = () => {
         <div className="page-row">
           <div className="page-row-label">
             <div className="page-row-name">失效映射处理</div>
-            <div className="page-row-desc">
-              原始路径不存在时自动处理
-            </div>
+            <div className="page-row-desc">路径不存在时自动处理</div>
           </div>
           <div
             className={`page-toggle ${handleInvalidMappings ? "on" : ""}`}
@@ -348,10 +426,8 @@ const GeneralSettings: React.FC = () => {
 
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">按点击次数排序</div>
-            <div className="page-row-desc">
-              按文件的点击次数自动排序，下次打开或快捷键呼出时生效
-            </div>
+            <div className="page-row-name">按点击排序</div>
+            <div className="page-row-desc">按使用频率自动排序</div>
           </div>
           <div
             className={`page-toggle ${sortByClickCount ? "on" : ""}`}
@@ -366,9 +442,7 @@ const GeneralSettings: React.FC = () => {
         <div className="page-row">
           <div className="page-row-label">
             <div className="page-row-name">扫描隐藏文件</div>
-            <div className="page-row-desc">
-              初始化扫描时包含隐藏文件
-            </div>
+            <div className="page-row-desc">扫描时包含隐藏文件</div>
           </div>
           <div
             className={`page-toggle ${scanHiddenFiles ? "on" : ""}`}
@@ -387,9 +461,7 @@ const GeneralSettings: React.FC = () => {
         <div className="page-row">
           <div className="page-row-label">
             <div className="page-row-name">手动扫描桌面</div>
-            <div className="page-row-desc">
-              扫描当前桌面并添加到当前收纳盒
-            </div>
+            <div className="page-row-desc">扫描桌面并添加到收纳盒</div>
           </div>
           <button
             className="page-btn"
@@ -401,11 +473,35 @@ const GeneralSettings: React.FC = () => {
         </div>
       </div>
 
+      {isPortable && (
+        <div className="page-card">
+          <div className="page-row">
+            <div className="page-row-label">
+              <div className="page-row-name">存储路径</div>
+              <div className="page-row-desc">数据文件的存储位置</div>
+            </div>
+            <button
+              className="page-btn"
+              onClick={() => setShowStoragePathModal(true)}
+            >
+              更改路径
+            </button>
+          </div>
+          <div className="page-row">
+            <div className="page-row-label" style={{ width: '100%' }}>
+              <div className="page-row-desc" style={{ fontSize: '12px', color: 'var(--txt2)', wordBreak: 'break-all' }}>
+                当前路径: {isLoadingPath ? '加载中...' : (currentDataPath || '未设置')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="page-card">
         <div className="page-row">
           <div className="page-row-label">
             <div className="page-row-name danger">危险操作</div>
-            <div className="page-row-desc">重置设置或清除数据</div>
+            <div className="page-row-desc">重置或清除数据</div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
@@ -437,13 +533,13 @@ const GeneralSettings: React.FC = () => {
         <div className="page-row">
           <div className="page-row-label">
             <div className="page-row-name">自动备份</div>
-            <div className="page-row-desc">定期自动创建系统备份</div>
+            <div className="page-row-desc">定期创建系统备份</div>
           </div>
           <CustomSelect
             value={autoBackupInterval}
             onChange={(value) => setAutoBackupInterval(value)}
             options={[
-              { value: 'never', label: '从不自动备份' },
+              { value: 'never', label: '从不备份' },
               { value: '5min', label: '每5分钟' },
               { value: '10min', label: '每10分钟' },
               { value: '30min', label: '每30分钟' },
@@ -455,7 +551,7 @@ const GeneralSettings: React.FC = () => {
         <div className="page-row">
           <div className="page-row-label">
             <div className="page-row-name">备份管理</div>
-            <div className="page-row-desc">创建手动备份或恢复数据</div>
+            <div className="page-row-desc">创建或恢复备份</div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
@@ -463,14 +559,14 @@ const GeneralSettings: React.FC = () => {
               style={{ flex: 1 }}
               onClick={handleRestoreBackup}
             >
-              恢复
+              恢复备份
             </button>
             <button
               className="page-btn"
               style={{ flex: 1 }}
               onClick={createBackup}
             >
-              创建手动节点
+              创建备份
             </button>
           </div>
         </div>
@@ -492,7 +588,7 @@ const GeneralSettings: React.FC = () => {
           <div className="page-row-label">
             <div className="page-row-name">备份说明</div>
             <div className="page-row-desc">
-              仅备份收纳盒等组件状态、布局等信息，永久性文件操作不会进行备份，请谨慎对待删除等操作。自动节点与手动节点相互独立，可以自由选择恢复的节点。
+              仅备份收纳盒状态和布局信息，文件操作不备份。自动与手动备份独立。
             </div>
           </div>
         </div>
@@ -501,25 +597,25 @@ const GeneralSettings: React.FC = () => {
       <div className="page-card">
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">自动清除</div>
+            <div className="page-row-name">日志清理</div>
             <div className="page-row-desc">自动清理指定天数前的日志</div>
           </div>
           <CustomSelect
             value={logAutoCleanupDays}
             onChange={(value) => setLogAutoCleanupDays(value)}
             options={[
-              { value: '1', label: '自动清除1天前的日志' },
-              { value: '2', label: '自动清除2天前的日志' },
-              { value: '3', label: '自动清除3天前的日志' },
-              { value: '7', label: '自动清除7天前的日志' },
-              { value: '30', label: '自动清除30天前的日志' }
+              { value: '1', label: '1天前' },
+              { value: '2', label: '2天前' },
+              { value: '3', label: '3天前' },
+              { value: '7', label: '7天前' },
+              { value: '30', label: '30天前' }
             ]}
           />
         </div>
 
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name danger">清理日志</div>
+            <div className="page-row-name danger">清除日志</div>
             <div className="page-row-desc">删除所有日志文件</div>
           </div>
           <button
@@ -538,6 +634,14 @@ const GeneralSettings: React.FC = () => {
         onOk={handleBackupRestore}
         onCancel={() => setShowBackupModal(false)}
       />
+      {isPortable && (
+        <StoragePathModal
+          visible={showStoragePathModal}
+          currentPath={currentDataPath}
+          onClose={() => setShowStoragePathModal(false)}
+          onConfirm={handleChangeStoragePath}
+        />
+      )}
     </div>
   );
 };

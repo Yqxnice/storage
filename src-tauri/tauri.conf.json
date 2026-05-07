@@ -23,9 +23,11 @@
         "dragDropEnabled": true,
         "url": "index.html",
         "decorations": false,
-        "visible": true,
-        "transparent": false,
-        "center": true
+        "visible": false,
+        "transparent": true,
+        "backgroundColor": "#ffffff",
+        "center": true,
+        "shadow": true
       }
     ],
     "security": {

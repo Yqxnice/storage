@@ -1,5 +1,7 @@
 // 环境变量配置
 
+import { APP_INFO } from '../constants';
+
 interface ImportMetaEnv {
   readonly VITE_APP_NAME: string;
   readonly VITE_APP_VERSION: string;
@@ -12,8 +14,8 @@ interface ImportMeta {
 }
 
 export const env = {
-  appName: import.meta.env.VITE_APP_NAME || '桌面收纳',
-  appVersion: import.meta.env.VITE_APP_VERSION || '1.0.0',
+  appName: import.meta.env.VITE_APP_NAME || APP_INFO.NAME,
+  appVersion: import.meta.env.VITE_APP_VERSION || APP_INFO.VERSION,
   isDev: import.meta.env.DEV,
   isProd: import.meta.env.PROD,
   enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',

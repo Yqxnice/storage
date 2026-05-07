@@ -1,5 +1,20 @@
 // 应用配置常量
 
+export const APP_INFO = {
+  NAME: '桌面收纳',
+  VERSION: '1.0.0',
+  IDENTIFIER: 'com.desktopstorage.storage',
+  DESCRIPTION: '桌面文件收纳工具',
+  TAGLINE: '虚拟映射 · 不移动原始文件',
+} as const;
+
+export const DEVELOPER_INFO = {
+  AUTHOR: '桌面收纳团队',
+  CONTACT_EMAIL: 'support@desktoporganizer.com',
+  WEBSITE: 'https://desktoporganizer.com',
+  REPOSITORY: 'https://github.com/Yqxnice/storage',
+} as const;
+
 export const STORAGE_TYPES = {
   STORAGE: 'storage',
   SETTINGS: 'settings',

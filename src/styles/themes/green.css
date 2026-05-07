@@ -1,9 +1,17 @@
+
 /* 绿色主题 */
 
 [data-theme="green"] {
   --color-primary: #40c057;
-  --color-primary-bg: #ebfbee;
-  --color-primary-text: #2f9e44;
+  --color-primary-light: #ebfbee;
+  --color-primary-dark: #2f9e44;
   --color-primary-hover: #37b24d;
-  --color-primary-border: #40c057;
+  --color-primary-active: #2f9e44;
+  
+  /* 兼容旧变量名 */
+  --accent: #40c057;
+  --accent-bg: #ebfbee;
+  --accent-txt: #2f9e44;
+  --accent-hover: #37b24d;
+  --accent-border: #40c057;
 }

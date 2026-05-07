@@ -3,5 +3,5 @@
 export { useDebounce, debounce } from './useDebounce';
 export { useTheme, useTimeThemeCheck } from './useTheme';
 export { useEvent, useTauriEvent } from './useEvent';
-export { useWindow } from './useWindow';
-export { useDragDrop } from './useDragDrop';
+export { useWindowLayout } from './useWindowLayout';
+export { useSortable } from './useSortable';

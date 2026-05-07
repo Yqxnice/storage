@@ -2,6 +2,5 @@
 
 @import './variables.css';
 @import './reset.css';
-
-/* 原有的 app.css 内容保持兼容 */
 @import './app.css';
+@import './components.css';

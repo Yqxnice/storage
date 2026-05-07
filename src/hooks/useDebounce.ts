@@ -1,9 +1,9 @@
 import { useCallback, useRef, useEffect } from 'react';
 
-export function useDebounce<T extends (...args: unknown[]) => unknown>(
+export function useDebounce<T extends (...args: unknown[]) => Promise<unknown> | unknown>(
   fn: T,
   delay: number
-): (...args: Parameters<T>) => void {
+): (...args: Parameters<T>) => Promise<ReturnType<T> | undefined> {
   const timeoutRef = useRef<number | null>(null);
   const fnRef = useRef(fn);
 
@@ -11,13 +11,16 @@ export function useDebounce<T extends (...args: unknown[]) => unknown>(
     fnRef.current = fn;
   }, [fn]);
 
-  const debouncedFn = useCallback((...args: Parameters<T>) => {
-    if (timeoutRef.current !== null) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = window.setTimeout(() => {
-      fnRef.current(...args);
-    }, delay);
+  const debouncedFn = useCallback((...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
+    return new Promise((resolve) => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = window.setTimeout(() => {
+        const result = fnRef.current(...args);
+        resolve(result as ReturnType<T>);
+      }, delay);
+    });
   }, [delay]);
 
   useEffect(() => {
@@ -31,15 +34,20 @@ export function useDebounce<T extends (...args: unknown[]) => unknown>(
   return debouncedFn;
 }
 
-export function debounce<T extends (...args: unknown[]) => unknown>(
+export function debounce<T extends (...args: unknown[]) => Promise<unknown> | unknown>(
   fn: T,
   delay: number
-): (...args: Parameters<T>) => void {
+): (...args: Parameters<T>) => Promise<ReturnType<T> | undefined> {
   let timeout: number | null = null;
-  return (...args: Parameters<T>) => {
-    if (timeout !== null) {
-      clearTimeout(timeout);
-    }
-    timeout = window.setTimeout(() => fn(...args), delay);
+  return (...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
+    return new Promise((resolve) => {
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      timeout = window.setTimeout(() => {
+        const result = fn(...args);
+        resolve(result as ReturnType<T>);
+      }, delay);
+    });
   };
 }

@@ -1,14 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useStore, type Box, type Item } from '../../store';
+import { useStore, type Box, type Item, type BoxGroup } from '../../store';
 import { tauriIPC } from '../../utils/tauri-ipc';
 import { openNewBoxFloatWindow, reopenBoxFloatWindow } from '../../utils/box-float-actions';
 import RenameModal from '../modal/RenameModal';
 import MoveModal from '../modal/MoveModal';
 
+interface CustomMenuItem {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}
+
 interface ContextMenuProps {
-  type: 'box' | 'item';
-  data: Box | Item;
+  type: 'box' | 'item' | 'group';
+  data: Box | Item | BoxGroup;
   children: React.ReactNode;
+  items?: CustomMenuItem[];
 }
 
 /* 设计系统变量 */
@@ -75,7 +82,7 @@ styleSheet.textContent = `
 `;
 document.head.appendChild(styleSheet);
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children, items }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -83,7 +90,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children }) => {
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   
   const menuRef = useRef<HTMLDivElement>(null);
-  const { updateBox, deleteBox, removeItem, moveItem, boxes } = useStore();
+  const { updateBox, deleteBox, deleteGroup, removeItem, moveItem, boxes } = useStore();
 
   // 处理右键菜单
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -156,20 +163,27 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children }) => {
     }
     
     if (type === 'box') {
-      updateBox(data.id, newName);
+      updateBox(data.id, { name: newName });
     }
   };
 
   // 处理删除
   const handleDelete = async () => {
-    const message = type === 'box' 
-      ? `确定要删除收纳盒"${data.name}"吗？其中的文件将被移除。`
-      : `确定要移除文件"${data.name}"吗？`;
+    let message: string;
+    if (type === 'box') {
+      message = `确定要删除收纳盒"${data.name}"吗？其中的文件将被移除。`;
+    } else if (type === 'group') {
+      message = `确定要删除分组"${data.name}"吗？其中的收纳盒将被移出分组。`;
+    } else {
+      message = `确定要移除文件"${data.name}"吗？`;
+    }
     
     const confirmed = await tauriIPC.dialog.confirm(message, "确认删除");
     if (confirmed) {
       if (type === 'box') {
         deleteBox(data.id);
+      } else if (type === 'group') {
+        deleteGroup(data.id);
       } else {
         removeItem(data.id);
       }
@@ -220,7 +234,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children }) => {
 
   // 构建菜单项列表
   const renderMenuItems = () => {
-    const items: Array<{
+    const menuItems: Array<{
       id: number;
       content: React.ReactNode;
       onClick: () => void;
@@ -228,62 +242,80 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children }) => {
     }> = [];
     let idCounter = 0;
 
-    // 只有 item 有打开相关选项
-    if (type === 'item' && 'path' in data) {
-      items.push({
-        id: idCounter++,
-        content: '打开',
-        onClick: handleOpen,
+    if (items && items.length > 0) {
+      items.forEach((item) => {
+        menuItems.push({
+          id: idCounter++,
+          content: item.label,
+          onClick: () => {
+            item.onClick();
+            setIsOpen(false);
+          },
+          isDanger: item.danger,
+        });
       });
-      items.push({
-        id: idCounter++,
-        content: '在资源管理器打开',
-        onClick: handleOpenInExplorer,
-      });
-    }
+    } else {
+      // 只有 item 有打开相关选项
+      if (type === 'item' && 'path' in data) {
+        menuItems.push({
+          id: idCounter++,
+          content: '打开',
+          onClick: handleOpen,
+        });
+        menuItems.push({
+          id: idCounter++,
+          content: '在资源管理器打开',
+          onClick: handleOpenInExplorer,
+        });
+      }
 
-    // 只有 box 有重命名和悬浮窗选项
-    if (type === 'box') {
-      items.push({
-        id: idCounter++,
-        content: '重命名',
-        onClick: () => {
-          setRenameModalVisible(true);
-          setIsOpen(false);
-        },
-      });
-      items.push({
-        id: idCounter++,
-        content: (data as Box).floatWindowId ? '打开悬浮窗' : '创建悬浮窗',
-        onClick: async () => {
-          const box = data as Box;
-          try {
-            if (box.floatWindowId) {
-              await reopenBoxFloatWindow(box.id, box.name, box.floatWindowId);
-            } else {
-              await openNewBoxFloatWindow(box.id, box.name);
+      // box 和 group 有重命名选项
+      if (type === 'box' || type === 'group') {
+        menuItems.push({
+          id: idCounter++,
+          content: '重命名',
+          onClick: () => {
+            setRenameModalVisible(true);
+            setIsOpen(false);
+          },
+        });
+      }
+
+      // 只有 box 有悬浮窗选项
+      if (type === 'box') {
+        menuItems.push({
+          id: idCounter++,
+          content: (data as Box).floatWindowId ? '打开悬浮窗' : '创建悬浮窗',
+          onClick: async () => {
+            const box = data as Box;
+            try {
+              if (box.floatWindowId) {
+                await reopenBoxFloatWindow(box.id, box.name, box.floatWindowId);
+              } else {
+                await openNewBoxFloatWindow(box.id, box.name);
+              }
+            } catch (err) {
+              console.error('打开/创建悬浮窗失败:', err);
             }
-          } catch (err) {
-            console.error('打开/创建悬浮窗失败:', err);
-          }
-          setIsOpen(false);
-        },
-      });
+            setIsOpen(false);
+          },
+        });
+      }
+
+      // 只有 item 有移动选项
+      if (type === 'item') {
+        menuItems.push({
+          id: idCounter++,
+          content: '移动到',
+          onClick: () => {
+            setMoveModalVisible(true);
+            setIsOpen(false);
+          },
+        });
+      }
     }
 
-    // 只有 item 有移动选项
-    if (type === 'item') {
-      items.push({
-        id: idCounter++,
-        content: '移动到',
-        onClick: () => {
-          setMoveModalVisible(true);
-          setIsOpen(false);
-        },
-      });
-    }
-
-    return { items, deleteId: idCounter };
+    return { items: menuItems, deleteId: idCounter };
   };
 
   const { items: menuItems, deleteId } = renderMenuItems();
@@ -333,7 +365,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children }) => {
             onMouseLeave={() => setHoveredIndex(null)}
             onClick={handleDelete}
           >
-            {type === 'box' ? '删除' : '移除'}
+            {type === 'box' ? '删除' : type === 'group' ? '删除分组' : '移除'}
           </div>
         </div>
       )}

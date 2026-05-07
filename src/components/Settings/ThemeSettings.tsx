@@ -36,15 +36,13 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme }) => {
 
   return (
     <div className="page-section">
-      <div className="page-section-title">主题设置</div>
+      <div className="page-section-title">主题</div>
 
       <div className="page-card">
         <div className="page-row page-row-theme">
           <div className="page-row-label">
-            <div className="page-row-name">主题颜色</div>
-            <div className="page-row-desc">
-              选择应用的主题颜色
-            </div>
+            <div className="page-row-name">主题色</div>
+            <div className="page-row-desc">选择主题颜色</div>
           </div>
           <div className="theme-selector">
             {themes.map((t) => (
@@ -63,10 +61,8 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme }) => {
 
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">时间主题</div>
-            <div className="page-row-desc">
-              根据当前时间自动切换主题：白天使用亮色主题，晚上使用深色主题
-            </div>
+            <div className="page-row-name">自动切换</div>
+            <div className="page-row-desc">根据时间自动切换明暗主题</div>
           </div>
           <div
             className={`page-toggle ${timeThemeEnabled ? "on" : ""}`}
@@ -80,11 +76,8 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme }) => {
       <div className="page-card">
         <div className="page-row">
           <div className="page-row-label">
-            <div className="page-row-name">主题说明</div>
-            <div className="page-row-desc">
-              每个主题都有独特的颜色方案，包括基础颜色、状态颜色和主题色。
-              切换主题时，整个应用的颜色会统一变化。
-            </div>
+            <div className="page-row-name">说明</div>
+            <div className="page-row-desc">每个主题有独特配色，切换时应用颜色统一变化。</div>
           </div>
         </div>
       </div>

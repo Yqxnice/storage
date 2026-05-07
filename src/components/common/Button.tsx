@@ -35,11 +35,11 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   const getSizeStyles = () => {
     switch (size) {
       case 'small':
-        return { padding: '4px 12px', fontSize: '12px' };
+        return { padding: 'var(--spacing-xs) var(--spacing-md)', fontSize: 'var(--font-size-sm)' };
       case 'large':
-        return { padding: '10px 24px', fontSize: '15px' };
+        return { padding: 'var(--spacing-md) var(--spacing-xl)', fontSize: 'var(--font-size-lg)' };
       default:
-        return { padding: '6px 16px', fontSize: '13px' };
+        return { padding: 'var(--spacing-sm) var(--spacing-lg)', fontSize: 'var(--font-size-base)' };
     }
   };
 
@@ -103,15 +103,15 @@ const CustomButton: React.FC<CustomButtonProps> = ({
         display: block ? 'block' : 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '6px',
+        gap: 'var(--spacing-sm)',
         ...sizeStyles,
         backgroundColor: isActive ? typeStyles.activeBg : (isHovered ? typeStyles.hoverBg : typeStyles.backgroundColor),
         border: `${typeStyles.borderStyle || 'solid'} 1px ${typeStyles.borderColor}`,
-        borderRadius: '6px',
+        borderRadius: 'var(--radius-sm)',
         color: typeStyles.color,
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        fontWeight: '500',
-        transition: 'all 0.2s',
+        fontWeight: 'var(--font-weight-medium)',
+        transition: 'all var(--transition-normal) var(--ease-out)',
         opacity: loading ? 0.7 : 1,
         width: block ? '100%' : 'auto',
         ...style

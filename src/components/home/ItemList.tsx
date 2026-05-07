@@ -4,6 +4,9 @@ import ContextMenu from "../common/ContextMenu";
 import AddModal from "../modal/AddModal";
 import AddLinkModal from "../modal/AddLinkModal";
 import { tauriIPC } from "../../utils/tauri-ipc";
+import { useSortable } from "../../hooks";
+import { BOX_FLOAT_ITEMS_RELOAD } from "../../utils/box-float-notify";
+import { listen, emit } from '@tauri-apps/api/event';
 
 interface FileIconProps {
   item: Item;
@@ -88,12 +91,12 @@ const ItemList: React.FC = () => {
     items,
     activeBoxId,
     incrementClickCount,
-    sortByClickCount,
     reorderItems,
     addItem,
     addBox,
     setActiveBox,
     boxes,
+    syncStorageFromTauriStore,
   } = useStore();
 
   // 辅助函数：去掉文件后缀
@@ -108,9 +111,6 @@ const ItemList: React.FC = () => {
     return name;
   };
 
-  const [isWindowVisible, setIsWindowVisible] = useState(true);
-  const [draggedItem, setDraggedItem] = useState<Item | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isAddLinkModalVisible, setIsAddLinkModalVisible] = useState(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const openingQueueRef = useRef<Item[]>([]);
@@ -124,10 +124,27 @@ const ItemList: React.FC = () => {
   const SORT_DELAY_MS = 500;
 
   useEffect(() => {
-    tauriIPC.window.isVisible().then((isVisible: boolean) => {
-      setIsWindowVisible(isVisible);
-    });
-  }, []);
+    const handleItemsReload = async (event: { payload: { boxId?: string } }) => {
+      const { boxId } = event.payload;
+      if (boxId && boxId === activeBoxId) {
+        console.log('[ItemList] 收到悬浮窗排序更新，重新加载数据:', boxId);
+        try {
+          const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' });
+          if (raw && typeof raw === 'object') {
+            syncStorageFromTauriStore(raw as never);
+          }
+        } catch (error) {
+          console.error('[ItemList] 重新加载数据失败:', error);
+        }
+      }
+    };
+
+    const unlisten = listen(BOX_FLOAT_ITEMS_RELOAD, handleItemsReload);
+
+    return () => {
+      unlisten.then(fn => fn()).catch(console.error);
+    };
+  }, [activeBoxId, syncStorageFromTauriStore]);
 
   /**
    * 处理项目打开队列
@@ -162,12 +179,21 @@ const ItemList: React.FC = () => {
 
   const filteredItems = items
     .filter((item) => item.boxId === activeBoxId)
-    .sort((a, b) => {
-      if (!sortByClickCount) return 0;
-      if (isOpeningRef.current || !isWindowVisible) return 0;
-      if ((b.clickCount || 0) === (a.clickCount || 0)) return 0;
-      return (b.clickCount || 0) - (a.clickCount || 0);
-    });
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
+    console.log('[ItemList] handleReorder 被调用:', { fromIndex, toIndex });
+    reorderItems(fromIndex, toIndex);
+    if (activeBoxId) {
+      console.log('[ItemList] 通知悬浮窗排序更新:', activeBoxId);
+      void emit(BOX_FLOAT_ITEMS_RELOAD, { boxId: activeBoxId });
+    }
+  }, [reorderItems, activeBoxId]);
+
+  const { containerRef } = useSortable({
+    onReorder: handleReorder,
+    enabled: true,
+  });
 
   /**
    * 处理项目点击/双击
@@ -305,59 +331,19 @@ const ItemList: React.FC = () => {
     setIsAddLinkModalVisible(false);
   };
 
-  const handleDragStart = (e: React.DragEvent, item: Item) => {
-    if (sortByClickCount) return;
-    e.dataTransfer.setData("text/plain", item.id);
-    setDraggedItem(item);
-  };
-
-  const handleDragOverItem = (e: React.DragEvent, index: number) => {
-    if (sortByClickCount) return;
-    e.preventDefault();
-    setDragOverIndex(index);
-  };
-
-  const handleDropItem = (e: React.DragEvent, dropIndex: number) => {
-    if (sortByClickCount) return;
-    e.preventDefault();
-
-    const draggedItemId = e.dataTransfer.getData("text/plain");
-    const draggedIndex = filteredItems.findIndex(
-      (item) => item.id === draggedItemId,
-    );
-
-    if (draggedIndex !== -1 && draggedIndex !== dropIndex) {
-      reorderItems(draggedIndex, dropIndex);
-    }
-
-    setDraggedItem(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-    setDragOverIndex(null);
-  };
-
-
-
   return (
     <div className="grid-wrap">
       <div
+        ref={containerRef}
         className="grid allow-right-click"
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       >
-        {filteredItems.map((item, index) => (
+        {filteredItems.map((item) => (
           <ContextMenu key={item.id} type="item" data={item}>
             <div
-              className={`item ${dragOverIndex === index ? "drag-over" : ""} ${draggedItem?.id === item.id ? "dragging" : ""}`}
+              className="item"
               onClick={() => handleItemInteraction(item)}
               onDoubleClick={() => handleItemInteraction(item)}
-              onDragStart={(e) => handleDragStart(e, item)}
-              onDragOver={(e) => handleDragOverItem(e, index)}
-              onDrop={(e) => handleDropItem(e, index)}
-              onDragEnd={handleDragEnd}
-              draggable={!sortByClickCount}
             >
               <FileIcon item={item} />
               <div className="item-nm">

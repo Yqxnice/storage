@@ -129,3 +129,24 @@ export async function tryCloseBoxFloatMenuWindow(floatWindowId: string): Promise
     return false
   }
 }
+
+/**
+ * 预加载菜单（空操作，保留兼容性）
+ * @deprecated 此方法已废弃，保留仅用于兼容旧代码
+ */
+export async function preloadBoxFloatMenus(): Promise<void> {
+}
+
+/**
+ * 为悬浮窗预加载菜单（空操作，保留兼容性）
+ * @deprecated 此方法已废弃，保留仅用于兼容旧代码
+ * @param floatWindowId - 悬浮窗 ID
+ * @param boxId - 收纳盒 ID（可选）
+ * @param parentLabel - 父窗口标签（可选）
+ */
+export async function preloadBoxFloatMenuForFloat(
+  _floatWindowId: string,
+  _boxId?: string,
+  _parentLabel?: string
+): Promise<void> {
+}
