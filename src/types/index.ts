@@ -6,7 +6,7 @@ export type { FileInfo, DialogInputOptions, FsMkdirOptions, PlatformType, ThemeT
 
 // 存储类型
 export * from './storage';
-export type { Box, Item, OrphanBoxFloat, StorageData, BoxGroup, RuleCondition, AutoRule, ArchiveConfig, FileChangeType, FileChangeEvent, FileWatchConfig, FileWatchStatus } from './storage';
+export type { Box, Item, OrphanBoxFloat, StorageData, BoxGroup, ArchiveConfig, FileChangeType, FileChangeEvent, FileWatchConfig, FileWatchStatus } from './storage';
 
 // 窗口类型
 export * from './window';
@@ -15,7 +15,7 @@ export type { WindowPosition, FloatWindowLayout, WindowLayout } from './window';
 // 设置类型
 export * from './settings';
 export type {
-  ViewMode, AutoBackupInterval, SettingsState, SettingsActions, SettingsStore } from './settings';
+  ViewMode, AutoBackupInterval, SettingsState } from './settings';
 
 // 事件类型
 export * from './events';

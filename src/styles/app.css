@@ -1420,6 +1420,23 @@ input, textarea, .page-input, select {
   border-color: var(--accent);
 }
 
+/* 分组拖放目标样式 */
+.group-item.drag-target-active {
+  border: 1px dashed transparent;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.group-item.drag-target-hover {
+  background: var(--accent-bg);
+  border: 1px dashed var(--accent);
+}
+
+.group-item.drag-target-hover .group-header {
+  color: var(--accent);
+  font-weight: 500;
+}
+
 /* 收纳盒颜色圆点 */
 .lib-color-dot {
   width: 14px;

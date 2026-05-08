@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { useStore } from "../store";
-import { FaCog, FaKey, FaInfoCircle, FaListUl, FaTags, FaEye } from 'react-icons/fa';
+import { FaCog, FaKey, FaInfoCircle, FaListUl, FaEye } from 'react-icons/fa';
 import BottomNav from "../components/common/BottomNav";
 import GeneralSettings from "../components/Settings/GeneralSettings";
 import ShortcutsSettings from "../components/Settings/ShortcutsSettings";
 import AboutSettings from "../components/Settings/AboutSettings";
 import ThemeSettings from "../components/Settings/ThemeSettings";
-import AutoRuleManager from "../components/AutoRuleManager";
 import { FileWatchSettings } from "../components/Settings/FileWatchSettings";
 
-type NavItem = "general" | "theme" | "autoRule" | "shortcuts" | "fileWatch" | "about";
+type NavItem = "general" | "theme" | "shortcuts" | "fileWatch" | "about";
 
 interface SettingsProps {
   onNavClick?: (nav: "home" | "settings" | "stats" | "help") => void;
@@ -32,7 +31,6 @@ const Settings: React.FC<SettingsProps> = ({ onNavClick }) => {
   const navItems: { key: NavItem; label: string; icon: React.ReactNode }[] = [
     { key: "general", label: "通用设置", icon: <FaCog /> },
     { key: "theme", label: "主题设置", icon: <FaListUl /> },
-    { key: "autoRule", label: "自动归类", icon: <FaTags /> },
     { key: "fileWatch", label: "文件监控", icon: <FaEye /> },
     { key: "shortcuts", label: "快捷键", icon: <FaKey /> },
     { key: "about", label: "关于", icon: <FaInfoCircle /> },
@@ -71,10 +69,6 @@ const Settings: React.FC<SettingsProps> = ({ onNavClick }) => {
 
           {activeNav === "theme" && (
             <ThemeSettings theme={theme} setTheme={setTheme} />
-          )}
-
-          {activeNav === "autoRule" && (
-            <AutoRuleManager />
           )}
 
           {activeNav === "fileWatch" && (

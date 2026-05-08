@@ -1,7 +1,11 @@
-import { emit } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 
 export const BOX_FLOAT_ITEMS_RELOAD = 'box-float-items-reload'
 
-export function emitBoxFloatItemsReload(boxId: string): void {
-  void emit(BOX_FLOAT_ITEMS_RELOAD, { boxId })
+export async function emitBoxFloatItemsReload(boxId: string): Promise<void> {
+  try {
+    await invoke('emit_float_items_reload', { boxId })
+  } catch (error) {
+    console.error('Failed to emit float items reload event:', error)
+  }
 }

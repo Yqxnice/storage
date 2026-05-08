@@ -23,7 +23,9 @@ pub struct FloatWindowLayout {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WindowLayout {
+    #[serde(rename = "mainWindow")]
     pub main_window: WindowPosition,
+    #[serde(rename = "floatWindows")]
     pub float_windows: HashMap<String, FloatWindowLayout>,
     pub version: i32,
 }

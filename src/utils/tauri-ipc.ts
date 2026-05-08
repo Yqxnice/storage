@@ -341,10 +341,10 @@ export const tauriIPC = {
     },
   },
   app: {
-    getPath: async (name: string) => {
+    getPath: async (pathType: string) => {
       try {
-        validateNonEmpty(name, "路径名称不能为空");
-        return await invoke<string>(IPC_CHANNELS.APP_GET_PATH, { name });
+        validateNonEmpty(pathType, "路径名称不能为空");
+        return await invoke<string>(IPC_CHANNELS.APP_GET_PATH, { pathType });
       } catch (error) {
         handleError(error, "App get path");
       }
@@ -530,9 +530,9 @@ export const tauriIPC = {
     }
   },
   // 设置便携模式
-  setPortableMode: async (isPortable: boolean) => {
+  setPortableMode: async (portable: boolean) => {
     try {
-      const result = await invoke(IPC_CHANNELS.SET_PORTABLE_MODE, { isPortable });
+      const result = await invoke(IPC_CHANNELS.SET_PORTABLE_MODE, { portable });
       return result;
     } catch (error) {
       handleError(error, "Set portable mode");

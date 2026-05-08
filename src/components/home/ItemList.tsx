@@ -1,12 +1,15 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import { useStore, type Item } from "../../store";
+import { useStore } from "../../store";
+import type { Item } from "../../types";
 import ContextMenu from "../common/ContextMenu";
 import AddModal from "../modal/AddModal";
 import AddLinkModal from "../modal/AddLinkModal";
 import { tauriIPC } from "../../utils/tauri-ipc";
 import { useSortable } from "../../hooks";
 import { BOX_FLOAT_ITEMS_RELOAD } from "../../utils/box-float-notify";
-import { listen, emit } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { storageManager } from "../../utils/storage-manager";
 
 interface FileIconProps {
   item: Item;
@@ -91,7 +94,6 @@ const ItemList: React.FC = () => {
     items,
     activeBoxId,
     incrementClickCount,
-    reorderItems,
     addItem,
     addBox,
     setActiveBox,
@@ -127,22 +129,20 @@ const ItemList: React.FC = () => {
     const handleItemsReload = async (event: { payload: { boxId?: string } }) => {
       const { boxId } = event.payload;
       if (boxId && boxId === activeBoxId) {
-        console.log('[ItemList] 收到悬浮窗排序更新，重新加载数据:', boxId);
         try {
-          const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' });
-          if (raw && typeof raw === 'object') {
-            syncStorageFromTauriStore(raw as never);
-          }
+          await storageManager.syncFromBackend();
+          const raw = storageManager.getState();
+          syncStorageFromTauriStore(raw);
         } catch (error) {
           console.error('[ItemList] 重新加载数据失败:', error);
         }
       }
     };
 
-    const unlisten = listen(BOX_FLOAT_ITEMS_RELOAD, handleItemsReload);
+    const unlisten1 = listen(BOX_FLOAT_ITEMS_RELOAD, handleItemsReload);
 
     return () => {
-      unlisten.then(fn => fn()).catch(console.error);
+      unlisten1.then(fn => fn()).catch(console.error);
     };
   }, [activeBoxId, syncStorageFromTauriStore]);
 
@@ -181,14 +181,15 @@ const ItemList: React.FC = () => {
     .filter((item) => item.boxId === activeBoxId)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-  const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
-    console.log('[ItemList] handleReorder 被调用:', { fromIndex, toIndex });
-    reorderItems(fromIndex, toIndex);
+  const handleReorder = useCallback(async (fromIndex: number, toIndex: number) => {
     if (activeBoxId) {
-      console.log('[ItemList] 通知悬浮窗排序更新:', activeBoxId);
-      void emit(BOX_FLOAT_ITEMS_RELOAD, { boxId: activeBoxId });
+      await storageManager.update({
+        type: 'reorderItems',
+        payload: { boxId: activeBoxId, fromIndex, toIndex }
+      })
+      await invoke('emit_float_items_reload', { boxId: activeBoxId })
     }
-  }, [reorderItems, activeBoxId]);
+  }, [activeBoxId]);
 
   const { containerRef } = useSortable({
     onReorder: handleReorder,

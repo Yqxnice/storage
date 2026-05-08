@@ -1,5 +1,3 @@
-// 设置相关类型定义
-
 import type { ThemeType } from './common';
 
 export type ViewMode = 'large' | 'small' | 'list';
@@ -21,9 +19,16 @@ export interface SettingsState {
   autoBackupInterval: AutoBackupInterval | string;
   logAutoCleanupDays: string;
   scanHiddenFiles: boolean;
-}
-
-export interface SettingsActions {
+  setScanHiddenFiles: (value: boolean) => void;
+  
+  fileWatchEnabled: boolean;
+  fileWatchPaths: string[];
+  fileWatchIgnorePatterns: string[];
+  fileWatchDebounceDelay: number;
+  setFileWatchEnabled: (enabled: boolean) => void;
+  setFileWatchPaths: (paths: string[]) => void;
+  setFileWatchIgnorePatterns: (patterns: string[]) => void;
+  setFileWatchDebounceDelay: (delay: number) => void;
   setViewMode: (mode: ViewMode) => void;
   setTrayVisible: (visible: boolean) => void;
   setShortcuts: (shortcuts: Record<string, string>) => void;
@@ -37,7 +42,6 @@ export interface SettingsActions {
   setHandleInvalidMappings: (value: boolean) => void;
   setAutoBackupInterval: (interval: AutoBackupInterval | string) => void;
   setLogAutoCleanupDays: (days: string) => void;
-  setScanHiddenFiles: (value: boolean) => void;
   createAutoBackup: (backupType: string) => Promise<void>;
   createBackup: () => Promise<void>;
   restoreBackup: (backupId: string) => Promise<void>;
@@ -47,5 +51,3 @@ export interface SettingsActions {
   resetSettings: () => Promise<void>;
   clearAllData: (option?: 'storage' | 'all') => Promise<void>;
 }
-
-export interface SettingsStore extends SettingsState, SettingsActions {}

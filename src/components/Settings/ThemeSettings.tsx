@@ -1,7 +1,6 @@
 import React from 'react';
 import { useStore } from '../../store';
 import { getThemeOptions, type ThemeKey } from '../../utils/theme';
-import { tauriIPC } from '../../utils/tauri-ipc';
 
 interface ThemeSettingsProps {
   theme: string;
@@ -13,23 +12,11 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme }) => {
 
   const handleThemeChange = (newTheme: ThemeKey) => {
     setTheme(newTheme);
-    // 使用 tauriIPC.store.set 保存主题设置
-    tauriIPC.store.set({
-      key: 'theme',
-      value: newTheme,
-      storeType: 'settings',
-    });
   };
 
   const handleTimeThemeToggle = () => {
     const newValue = !timeThemeEnabled;
     setTimeThemeEnabled(newValue);
-    // 使用 tauriIPC.store.set 保存时间主题设置
-    tauriIPC.store.set({
-      key: 'timeThemeEnabled',
-      value: newValue,
-      storeType: 'settings',
-    });
   };
 
   const themes = getThemeOptions();

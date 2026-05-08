@@ -128,7 +128,7 @@ export const FileWatchSettings = () => {
           <div className="page-row-label">
             <div className="page-row-name">启用文件监控</div>
             <div className="page-row-desc">
-              实时监控文件变化并自动归类
+              实时监控文件变化
               <span className={`status-badge ${getStatusClass()}`} style={{ marginLeft: 8 }}>
                 {getStatusText()}
               </span>

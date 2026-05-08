@@ -14,21 +14,25 @@ interface BoxManagerProps {
 }
 
 const BoxManager: React.FC<BoxManagerProps> = ({ onAddBox, onNavClick, activeNav }) => {
-  const { boxes, groups, activeBoxId, setActiveBox, addBox, addGroup, reorderBoxes } = useStore();
+  const { boxes, groups, activeBoxId, setActiveBox, addBox, addGroup, reorderBoxes, moveBoxToGroup, reorderGroups } = useStore();
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [newBoxName, setNewBoxName] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
 
-  const handleAddBox = () => {
+  const handleAddBox = async () => {
     if (!newBoxName.trim()) {
       setIsAdding(false);
       return;
     }
-    addBox(newBoxName);
-    setNewBoxName('');
-    setIsAdding(false);
-    onAddBox?.();
+    try {
+      await addBox(newBoxName);
+      setNewBoxName('');
+      setIsAdding(false);
+      onAddBox?.();
+    } catch (error) {
+      showMessage.error(error instanceof Error ? error.message : '添加收纳盒失败');
+    }
   };
 
   const handleAddGroup = () => {
@@ -48,13 +52,42 @@ const BoxManager: React.FC<BoxManagerProps> = ({ onAddBox, onNavClick, activeNav
   };
 
   const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
-    console.log('[BoxManager] 收纳盒排序:', fromIndex, '->', toIndex);
     reorderBoxes(fromIndex, toIndex);
   }, [reorderBoxes]);
 
+  const handleMoveBox = useCallback((boxId: string, fromGroupId: string | null, toGroupId: string | null) => {
+    console.group('BoxManager handleMoveBox');
+    console.log('参数:', { boxId, fromGroupId, toGroupId });
+    
+    if (boxId) {
+      try {
+        console.log('✅ 调用 moveBoxToGroup，目标分组: undefined (未分组)');
+        moveBoxToGroup(boxId, undefined);
+      } catch (error) {
+        showMessage.error(error instanceof Error ? error.message : '移动收纳盒失败');
+      }
+    } else {
+      console.log('❌ boxId 为空');
+    }
+    
+    console.groupEnd();
+  }, [moveBoxToGroup]);
+
+  const handleReorderGroups = useCallback((fromIndex: number, toIndex: number) => {
+    reorderGroups(fromIndex, toIndex);
+  }, [reorderGroups]);
+
   const { containerRef } = useSortable({
     onReorder: handleReorder,
+    onMoveBox: handleMoveBox,
     enabled: true,
+    groupId: null,
+  });
+
+  const { containerRef: groupsContainerRef } = useSortable({
+    onReorder: handleReorderGroups,
+    enabled: true,
+    mode: 'groups',
   });
 
   return (
@@ -115,7 +148,7 @@ const BoxManager: React.FC<BoxManagerProps> = ({ onAddBox, onNavClick, activeNav
 
       <div className="lib-list">
         {groups.length > 0 && (
-          <div className="groups-section">
+          <div ref={groupsContainerRef} className="groups-section">
             {groups.map(group => (
               <GroupItem
                 key={group.id}
@@ -128,28 +161,32 @@ const BoxManager: React.FC<BoxManagerProps> = ({ onAddBox, onNavClick, activeNav
           </div>
         )}
 
-        {ungroupedBoxes.length > 0 && (
-          <div ref={containerRef} className="ungrouped-section">
-            {ungroupedBoxes.map((box) => (
-              <ContextMenu
-                key={box.id}
-                type="box"
-                data={box}
+        <div 
+          ref={containerRef} 
+          className="ungrouped-section" 
+          style={{ minHeight: ungroupedBoxes.length === 0 ? '40px' : 'auto' }}
+          key={`ungrouped-${ungroupedBoxes.map(b => b.id).join('-')}`}
+        >
+          {ungroupedBoxes.map((box) => (
+            <ContextMenu
+              key={box.id}
+              type="box"
+              data={box}
+            >
+              <div
+                className={`lib-item ${activeBoxId === box.id ? 'active' : ''}`}
+                onClick={() => setActiveBox(box.id)}
+                data-box-id={box.id}
               >
-                <div
-                  className={`lib-item ${activeBoxId === box.id ? 'active' : ''}`}
-                  onClick={() => setActiveBox(box.id)}
-                >
-                  <div className="lib-color-dot" style={{ backgroundColor: box.color || '#8e8e93' }}></div>
-                  <div className="lib-name">{box.name}</div>
-                  {activeBoxId === box.id && (
-                    <div className="lib-dot" style={{ background: 'var(--accent)' }}></div>
-                  )}
-                </div>
-              </ContextMenu>
-            ))}
-          </div>
-        )}
+                <div className="lib-color-dot" style={{ backgroundColor: box.color || '#8e8e93' }}></div>
+                <div className="lib-name">{box.name}</div>
+                {activeBoxId === box.id && (
+                  <div className="lib-dot" style={{ background: 'var(--accent)' }}></div>
+                )}
+              </div>
+            </ContextMenu>
+          ))}
+        </div>
 
         {boxes.length === 0 && groups.length === 0 && (
           <div className="empty-state">

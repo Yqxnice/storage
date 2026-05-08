@@ -1,5 +1,7 @@
 use crate::utils::{get_storage_dir, PORTABLE_MARKER};
 use std::fs;
+use dirs;
+use tauri::Emitter;
 
 #[tauri::command]
 pub fn set_portable_mode(portable: bool) -> Result<(), String> {
@@ -36,6 +38,8 @@ pub fn app_get_path(path_type: String) -> Result<String, String> {
             let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
             exe_path.parent().ok_or("Failed to get exe directory")?.to_path_buf()
         }
+        "appData" => dirs::data_dir().ok_or("Failed to get data directory")?,
+        "appdata" => dirs::data_dir().ok_or("Failed to get data directory")?,
         _ => return Err(format!("Unknown path type: {}", path_type)),
     };
     
@@ -53,8 +57,9 @@ pub fn get_custom_storage_path() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn app_restart(_app: tauri::AppHandle) -> Result<(), String> {
-    std::process::exit(0);
+pub fn app_restart(app: tauri::AppHandle) -> Result<(), String> {
+    app.restart();
+    Ok(())
 }
 
 #[tauri::command]
@@ -70,4 +75,17 @@ pub fn dialog_show_input_box(_options: std::collections::HashMap<String, String>
 #[tauri::command]
 pub fn dialog_show_confirm(_message: String, _title: Option<String>) -> Result<bool, String> {
     Ok(true)
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct FloatItemsReloadPayload {
+    #[serde(rename = "boxId")]
+    pub box_id: String,
+}
+
+#[tauri::command]
+pub fn emit_float_items_reload(app: tauri::AppHandle, box_id: String) -> Result<(), String> {
+    let payload = FloatItemsReloadPayload { box_id };
+    app.emit("box-float-items-reload", payload)
+        .map_err(|e| format!("Failed to emit event: {}", e))
 }

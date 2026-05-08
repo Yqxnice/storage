@@ -2,7 +2,8 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { LogicalSize } from '@tauri-apps/api/window'
 import { listen, emit } from '@tauri-apps/api/event'
-import type { Item, Box } from '../store'
+import { invoke } from '@tauri-apps/api/core'
+import type { Item, Box } from '../types'
 import { tauriIPC } from '../utils/tauri-ipc'
 import {
   bindOrphanFloatToNewBox,
@@ -17,6 +18,7 @@ import { BOX_FLOAT_ITEMS_RELOAD } from '../utils/box-float-notify'
 import { logDebug, logInfo, logError } from '../utils/logger'
 import { formatFileSize } from '../utils/helpers'
 import { useSortable } from '../hooks'
+import { storageManager, STORAGE_EVENTS } from '../utils/storage-manager'
 
 const IconChevronUp = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -160,17 +162,15 @@ const BoxFloatApp: React.FC = () => {
   }, [titleName])
 
   const reloadTitleFromStorage = useCallback(async () => {
-    const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
-    if (!raw || typeof raw !== 'object') return
+    const storageData = storageManager.getState()
+    
     if (isOrphan && floatWindowId) {
-      const orphans = (raw as { orphanBoxFloats?: { floatWindowId: string; title: string }[] }).orphanBoxFloats
-      const o = Array.isArray(orphans) ? orphans.find((x) => x.floatWindowId === floatWindowId) : undefined
+      const o = storageData.orphanBoxFloats.find((x) => x.floatWindowId === floatWindowId)
       if (o?.title) setTitleName(o.title)
       return
     }
     if (!boxId) return
-    const boxes = (raw as { boxes: Box[] }).boxes
-    const b = Array.isArray(boxes) ? boxes.find((x) => x.id === boxId) : undefined
+    const b = storageData.boxes.find((x) => x.id === boxId)
     if (b?.name) setTitleName(b.name)
     if (b?.color !== undefined) setBoxColor(b.color)
   }, [boxId, floatWindowId, isOrphan])
@@ -183,8 +183,9 @@ const BoxFloatApp: React.FC = () => {
     }
     let cancelled = false
     void (async () => {
-      await reloadTitleFromStorage()
+      await storageManager.init()
       if (cancelled) return
+      await reloadTitleFromStorage()
     })()
     return () => {
       cancelled = true
@@ -196,10 +197,8 @@ const BoxFloatApp: React.FC = () => {
     let cancelled = false;
 
     const setupListener = async () => {
-      const unlisten = await listen('box-float-storage-updated', (event) => {
+      const unlisten = await listen(STORAGE_EVENTS.SYNCED, () => {
         if (cancelled || editingTitleRef.current) return;
-        const payload = event.payload as { boxId?: string };
-        if (payload.boxId && payload.boxId !== boxId) return;
         void reloadTitleFromStorage();
       });
       
@@ -234,58 +233,75 @@ const BoxFloatApp: React.FC = () => {
     return () => window.cancelAnimationFrame(id)
   }, [editingTitle])
 
-  const loadItemsForBox = async (boxId: string): Promise<Item[]> => {
-    const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
-    if (!raw || typeof raw !== 'object') return []
-    const items = (raw as { items: Item[] }).items || []
+  const loadItemsForBox = useCallback((boxId: string): Item[] => {
+    const storageData = storageManager.getState()
+    const items = storageData.items || []
     return items.filter((item) => item.boxId === boxId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-  }
+  }, [])
 
   const refreshItems = useCallback(async (id: string) => {
     setLoadError(null)
     try {
-      const next = await loadItemsForBox(id)
+      await storageManager.syncFromBackend()
+      const next = loadItemsForBox(id)
       setItems(next)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setLoadError(msg)
       setItems([])
     }
-  }, [])
+  }, [loadItemsForBox])
 
   useEffect(() => {
     if (isOrphan) return
     if (!boxId) return
-    refreshItems(boxId)
+    
+    void storageManager.init().then(() => {
+      refreshItems(boxId)
+    })
   }, [boxId, isOrphan, refreshItems])
 
   useEffect(() => {
-    let unlistenFn: (() => void) | Promise<(() => void)> | null = null;
+    let unlistenFn1: (() => void) | Promise<(() => void)> | null = null;
+    let unlistenFn2: (() => void) | Promise<(() => void)> | null = null;
     let cancelled = false;
 
-    const setupListener = async () => {
-      const unlisten = await listen(BOX_FLOAT_ITEMS_RELOAD, (event) => {
+    const setupListeners = async () => {
+      const unlisten1 = await listen(STORAGE_EVENTS.SYNCED, () => {
         if (cancelled) return;
-        const payload = event.payload as { boxId?: string };
-        if (!payload.boxId || payload.boxId !== boxId) return;
-        void refreshItems(payload.boxId);
+        if (!boxId) return;
+        void refreshItems(boxId);
+      });
+
+      const unlisten2 = await listen<{ boxId: string }>(BOX_FLOAT_ITEMS_RELOAD, (event) => {
+        if (cancelled) return;
+        const { boxId: eventBoxId } = event.payload;
+        if (!boxId || eventBoxId !== boxId) return;
+        void refreshItems(boxId);
       });
 
       if (cancelled) {
-        unlisten();
+        unlisten1();
+        unlisten2();
         return;
       }
-      unlistenFn = unlisten;
+      unlistenFn1 = unlisten1;
+      unlistenFn2 = unlisten2;
     };
 
-    setupListener();
+    setupListeners();
 
     return () => {
       cancelled = true;
-      if (typeof unlistenFn === 'function') {
-        unlistenFn();
-      } else if (unlistenFn instanceof Promise) {
-        unlistenFn.then(fn => fn()).catch(logError);
+      if (typeof unlistenFn1 === 'function') {
+        unlistenFn1();
+      } else if (unlistenFn1 instanceof Promise) {
+        unlistenFn1.then(fn => fn()).catch(logError);
+      }
+      if (typeof unlistenFn2 === 'function') {
+        unlistenFn2();
+      } else if (unlistenFn2 instanceof Promise) {
+        unlistenFn2.then(fn => fn()).catch(logError);
       }
     };
   }, [boxId, isOrphan, refreshItems])
@@ -562,32 +578,13 @@ const BoxFloatApp: React.FC = () => {
     
     if (!boxId) return
     
-    const newItems = [...items]
-    const [movedItem] = newItems.splice(fromIndex, 1)
-    newItems.splice(toIndex, 0, movedItem)
-    
-    newItems.forEach((item, index) => {
-      if (item.order !== index) {
-        item.order = index
-      }
+    await storageManager.update({
+      type: 'reorderItems',
+      payload: { boxId, fromIndex, toIndex },
     })
     
-    setItems(newItems)
-    
-    try {
-      const raw = await tauriIPC.store.get({ key: 'storage', storeType: 'storage' })
-      if (raw && typeof raw === 'object') {
-        const storage = { ...raw } as { items: Item[] }
-        const otherItems = storage.items?.filter(item => item.boxId !== boxId) || []
-        storage.items = [...newItems, ...otherItems]
-        await tauriIPC.store.set({ key: 'storage', value: storage, storeType: 'storage' })
-        
-        await emit(BOX_FLOAT_ITEMS_RELOAD, { boxId })
-      }
-    } catch (err) {
-      logError('保存排序失败:', err)
-    }
-  }, [items, boxId])
+    await invoke('emit_float_items_reload', { boxId })
+  }, [boxId])
 
   const { containerRef } = useSortable({
     onReorder: handleReorder,

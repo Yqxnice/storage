@@ -7,6 +7,7 @@ export interface Box {
   createdAt: number;
   floatWindowId?: string;
   color?: string;
+  groupId?: string;
 }
 
 export interface Item {
@@ -21,6 +22,7 @@ export interface Item {
   addedAt: number;
   clickCount: number;
   order?: number;
+  size?: number;
 }
 
 export interface OrphanBoxFloat {
@@ -33,6 +35,8 @@ export interface StorageData {
   items: Item[];
   activeBoxId: string | null;
   orphanBoxFloats: OrphanBoxFloat[];
+  groups: BoxGroup[];
+  version: number;
 }
 
 export const BOX_COLOR_PRESETS: string[] = [
@@ -47,22 +51,6 @@ export interface BoxGroup {
   order: number;
   collapsed: boolean;
   boxIds: string[];
-}
-
-export interface RuleCondition {
-  field: 'fileType' | 'fileName' | 'filePath' | 'dateAdded';
-  operator: 'contains' | 'startsWith' | 'endsWith' | 'equals' | 'before' | 'after';
-  value: string;
-}
-
-export interface AutoRule {
-  id: string;
-  name: string;
-  enabled: boolean;
-  conditions: RuleCondition[];
-  targetBoxId: string;
-  action: 'move' | 'copy';
-  order: number;
 }
 
 export const FILE_TYPE_MAPPINGS: Record<string, string[]> = {

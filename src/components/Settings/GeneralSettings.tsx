@@ -5,6 +5,7 @@ import CustomSelect from '../common/CustomSelect';
 import { tauriIPC } from '../../utils/tauri-ipc';
 import { STORAGE_TYPES } from '../../constants';
 import StoragePathModal from './StoragePathModal';
+import { storageManager } from '../../utils/storage-manager';
 
 interface BackupSelectModalProps {
   visible: boolean;
@@ -284,20 +285,30 @@ const GeneralSettings: React.FC = () => {
       
       const desktopFiles = await tauriIPC.scanDesktopFiles(scanHiddenFiles);
       
+      console.log('[GeneralSettings] 扫描到的桌面文件数量:', desktopFiles?.length);
+      
       if (desktopFiles && Array.isArray(desktopFiles) && desktopFiles.length > 0) {
         let addedCount = 0;
         let skippedCount = 0;
         
-        for (const file of desktopFiles as any[]) {
-          const fileExists = items.some(
-            (item) => item.boxId === currentBoxId && item.path === file.path
+        for (let i = 0; i < desktopFiles.length; i++) {
+          const file = desktopFiles[i];
+          console.log(`[GeneralSettings] 处理第 ${i+1}/${desktopFiles.length} 个文件: ${file.name}`);
+          
+          const storageData = storageManager.getState();
+          console.log(`[GeneralSettings] 当前 storageManager 中的项目数量: ${storageData.items.length}`);
+          
+          const fileExists = storageData.items.some(
+            (item) => item.boxId === currentBoxId && file.path && item.path && item.path === file.path
           );
           
           if (fileExists) {
+            console.log(`[GeneralSettings] 文件已存在，跳过: ${file.name}`);
             skippedCount++;
             continue;
           }
           
+          console.log(`[GeneralSettings] 调用 addItem: ${file.name}`);
           await addItem({
             name: file.name,
             category: file.category || 'desktop',
@@ -308,8 +319,10 @@ const GeneralSettings: React.FC = () => {
             size: file.size
           });
           addedCount++;
+          console.log(`[GeneralSettings] addItem 完成，已添加: ${addedCount}`);
         }
         
+        console.log(`[GeneralSettings] 扫描结束，添加: ${addedCount}，跳过: ${skippedCount}`);
         showMessage.success(`扫描完成！添加了 ${addedCount} 个项目${skippedCount > 0 ? `，跳过了 ${skippedCount} 个已存在的项目` : ''}`);
       } else {
         showMessage.info('没有找到新的桌面文件');

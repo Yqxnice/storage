@@ -56,11 +56,6 @@ pub fn run() {
             commands::logger::logger_set_auto_cleanup_days,
             commands::logger::logger_get_logs,
             
-            // 自动规则
-            commands::auto_rules::match_auto_rules,
-            commands::auto_rules::save_auto_rules,
-            commands::auto_rules::load_auto_rules,
-            
             // 文件监控
             commands::file_watch::file_watch_start,
             commands::file_watch::file_watch_stop,
@@ -79,6 +74,7 @@ pub fn run() {
             commands::app::open_file_dialog,
             commands::app::dialog_show_input_box,
             commands::app::dialog_show_confirm,
+            commands::app::emit_float_items_reload,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

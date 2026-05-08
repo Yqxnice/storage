@@ -4,6 +4,7 @@ import { tauriIPC } from '../../utils/tauri-ipc';
 import { openNewBoxFloatWindow, reopenBoxFloatWindow } from '../../utils/box-float-actions';
 import RenameModal from '../modal/RenameModal';
 import MoveModal from '../modal/MoveModal';
+import { showMessage } from './Message';
 
 interface CustomMenuItem {
   label: string;
@@ -157,13 +158,17 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ type, data, children, items }
   }, []);
 
   // 处理重命名
-  const handleRename = (newName: string) => {
+  const handleRename = async (newName: string) => {
     if (!newName.trim()) {
       return;
     }
     
     if (type === 'box') {
-      updateBox(data.id, { name: newName });
+      try {
+        await updateBox(data.id, { name: newName });
+      } catch (error) {
+        showMessage.error(error instanceof Error ? error.message : '重命名失败');
+      }
     }
   };
 
